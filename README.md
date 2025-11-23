@@ -17,10 +17,9 @@
 ### 1️⃣ Projeyi İndirin
 ```bash
 git clone <repository-url>
-cd ECommerceMicroservices
+cd BeymenCase
 2️⃣ Docker Compose ile Çalıştırın
-bash
-Kodu kopyala
+```bash
 docker-compose up --build
 veya PowerShell kullanarak:
 
@@ -29,5 +28,4 @@ Proje klasörü içinde start.ps1 scriptini çalıştırabilirsiniz.
 Bu script tüm containerları ayağa kaldırır ve ilgili Swagger sayfalarını otomatik açar:
 
 powershell
-Kodu kopyala
 .\start.ps1
