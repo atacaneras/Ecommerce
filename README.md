@@ -30,5 +30,4 @@ Proje klasörü içinde start.ps1 scriptini çalıştırabilirsiniz.
 Bu script tüm containerları ayağa kaldırır ve ilgili Swagger sayfalarını otomatik açar:
 
 ```bash
-powershell
 .\start.ps1
