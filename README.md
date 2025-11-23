@@ -18,14 +18,17 @@
 ```bash
 git clone <repository-url>
 cd BeymenCase
+```
 2️⃣ Docker Compose ile Çalıştırın
 ```bash
 docker-compose up --build
+```
 veya PowerShell kullanarak:
 
 Proje klasörü içinde start.ps1 scriptini çalıştırabilirsiniz.
 
 Bu script tüm containerları ayağa kaldırır ve ilgili Swagger sayfalarını otomatik açar:
 
+```bash
 powershell
 .\start.ps1
