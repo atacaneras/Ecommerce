@@ -1,9 +1,9 @@
-﻿using Shared.Infrastructure.Messaging;
-using Shared.Infrastructure.Messaging.Messages;
+﻿using Shared.Infrastructure.Messaging
+using Shared.Infrastructure.Messaging.Messages; 
 using Shared.Infrastructure.Repository;
 using System.Text.Json;
 using VerificationService.DTOs;
-using OrderService.DTOs;
+using OrderService.DTOs; 
 using VerificationService.Models;
 
 namespace VerificationService.Services
@@ -14,14 +14,14 @@ namespace VerificationService.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<VerificationServiceImpl> _logger;
         private readonly IMessagePublisher _messagePublisher;
-        private readonly IRepository<VerificationRequestLog> _verificationLogRepository; // LOG REPOSITORY EKLENDİ
+        private readonly IRepository<VerificationRequestLog> _verificationLogRepository;
 
         public VerificationServiceImpl(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             ILogger<VerificationServiceImpl> logger,
             IMessagePublisher messagePublisher,
-            IRepository<VerificationRequestLog> verificationLogRepository) // LOG REPOSITORY ENJEKTE EDİLDİ
+            IRepository<VerificationRequestLog> verificationLogRepository)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
