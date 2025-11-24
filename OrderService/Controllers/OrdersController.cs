@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using OrderService.DTOs;
+using OrderService.Models;
 using OrderService.Services;
+using System;
+using VerificationService.DTOs;
 
 namespace OrderService.Controllers
 {
@@ -62,6 +65,30 @@ namespace OrderService.Controllers
             {
                 _logger.LogError(ex, "Tüm siparişler alınırken hata oluştu");
                 return StatusCode(500, new { message = "Siparişler alınırken bir hata oluştu" });
+            }
+        }
+
+        [HttpPut("status/{id}")]
+        public async Task<ActionResult<OrderResponse>> UpdateOrderStatus(Guid id, [FromBody] VerificationService.DTOs.UpdateOrderStatusRequest request)
+        {
+            try
+            {
+                if (!Enum.TryParse(request.Status, true, out OrderStatus newStatus))
+                {
+                    return BadRequest(new { message = $"Geçersiz sipariş durumu: {request.Status}" });
+                }
+
+                var order = await _orderService.UpdateOrderStatusAsync(id, newStatus);
+
+                if (order == null)
+                    return NotFound(new { message = $"Sipariş {id} bulunamadı" });
+
+                return Ok(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş {OrderId} durumu güncellenirken hata oluştu", id);
+                return StatusCode(500, new { message = "Sipariş durumu güncellenirken bir hata oluştu" });
             }
         }
     }

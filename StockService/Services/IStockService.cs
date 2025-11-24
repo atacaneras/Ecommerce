@@ -9,6 +9,8 @@ namespace StockService.Services
         Task<bool> DeleteProductAsync(int productId);
 
         Task<bool> UpdateStockAsync(UpdateStockRequest request);
+        Task<bool> FinalizeStockAsync(UpdateStockRequest request);
+
         Task<bool> CheckStockAvailabilityAsync(int productId, int quantity);
 
         Task<ProductResponse?> GetProductByIdAsync(int productId);

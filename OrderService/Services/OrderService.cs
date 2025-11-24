@@ -36,7 +36,7 @@ namespace OrderService.Services
                     CustomerName = request.CustomerName,
                     CustomerEmail = request.CustomerEmail,
                     CustomerPhone = request.CustomerPhone,
-                    Status = OrderStatus.Pending, // Türkçe enum kullanıldı
+                    Status = OrderStatus.Pending,
                     CreatedAt = DateTime.UtcNow,
                     Items = request.Items.Select(i => new OrderItem
                     {
@@ -68,13 +68,25 @@ namespace OrderService.Services
                 await _messagePublisher.PublishAsync("stock-exchange", "stock.update", stockMessage);
                 _logger.LogInformation("Sipariş {OrderId} için stok güncelleme mesajı yayınlandı", order.Id);
 
+                // Onay servisi için mesaj yayınla
+                var verificationMessage = new VerificationMessage
+                {
+                    OrderId = order.Id,
+                    CustomerName = order.CustomerName,
+                    CustomerEmail = order.CustomerEmail,
+                    TotalAmount = order.TotalAmount
+                };
+
+                await _messagePublisher.PublishAsync("verification-exchange", "verification.create", verificationMessage);
+                _logger.LogInformation("Sipariş {OrderId} için onay talebi mesajı yayınlandı", order.Id);
+
                 // Bildirim mesajını yayınla
                 var notificationMessage = new NotificationMessage
                 {
                     OrderId = order.Id,
                     CustomerEmail = order.CustomerEmail,
                     CustomerPhone = order.CustomerPhone,
-                    Message = $"Siparişiniz #{order.Id} alındı ve işleniyor. Toplam: {order.TotalAmount:F2}₺",
+                    Message = $"Siparişiniz #{order.Id} alındı ve onay bekliyor. Toplam: {order.TotalAmount:F2}₺",
                     Type = NotificationType.Both
                 };
 
@@ -116,6 +128,26 @@ namespace OrderService.Services
                 _logger.LogError(ex, "Tüm siparişler alınırken hata oluştu");
                 throw;
             }
+        }
+
+        public async Task<OrderResponse?> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null)
+            {
+                _logger.LogWarning("Durumu güncellenecek sipariş {OrderId} bulunamadı", orderId);
+                return null;
+            }
+
+            _logger.LogInformation("Sipariş {OrderId} durum değişikliği: {OldStatus} -> {NewStatus}",
+                orderId, order.Status, newStatus);
+
+            order.Status = newStatus;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _orderRepository.UpdateAsync(order);
+
+            return MapToResponse(order);
         }
 
         private OrderResponse MapToResponse(Order order)

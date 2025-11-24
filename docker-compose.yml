@@ -77,6 +77,26 @@ services:
     networks:
       - beymen-network
 
+  # PostgreSQL - Verification Database
+  postgres-verification:
+    image: postgres:15
+    container_name: beymen-postgres-verification
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: VerificationDb
+      POSTGRES_USER: verificationuser
+      POSTGRES_PASSWORD: verificationpass123
+    volumes:
+      - verification-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verificationuser -d VerificationDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beymen-network
+
   # Order Service
   order-service:
     build:
@@ -154,7 +174,33 @@ services:
       - beymen-network
     restart: on-failure
 
-# Frontend
+  # Verification Service
+  verification-service:
+    build:
+      context: .
+      dockerfile: VerificationService/Dockerfile
+    container_name: beymen-verification-service
+    ports:
+      - "5004:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres-verification;Database=VerificationDb;Username=verificationuser;Password=verificationpass123
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+      - RabbitMQ__Port=5672
+      - Services__OrderService=http://order-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-verification:
+        condition: service_healthy
+    networks:
+      - beymen-network
+    restart: on-failure
+
+  # Frontend
   frontend:
     build:
       context: ./frontend
@@ -166,6 +212,7 @@ services:
       - REACT_APP_API_BASE=http://order-service:80
       - REACT_APP_STOCK_API=http://stock-service:80
       - REACT_APP_NOTIFICATION_API=http://notification-service:80
+      - REACT_APP_VERIFICATION_API=http://verification-service:80
     networks:
       - beymen-network
     restart: on-failure
@@ -173,11 +220,13 @@ services:
       - order-service
       - stock-service
       - notification-service
+      - verification-service
 
 volumes:
   order-data:
   stock-data:
   notification-data:
+  verification-data:
 
 networks:
   beymen-network:

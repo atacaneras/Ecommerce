@@ -11,15 +11,21 @@ namespace StockService.Services
         private readonly IRepository<Product> _productRepository;
         private readonly StockDbContext _context;
         private readonly ILogger<StockServiceImpl> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
         public StockServiceImpl(
-            IRepository<Product> productRepository,
-            StockDbContext context,
-            ILogger<StockServiceImpl> logger)
+           IRepository<Product> productRepository,
+           StockDbContext context,
+           ILogger<StockServiceImpl> logger,
+           IHttpClientFactory httpClientFactory, 
+           IConfiguration configuration)
         {
             _productRepository = productRepository;
             _context = context;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         public async Task<ProductResponse> CreateProductAsync(CreateProductRequest request)
@@ -125,14 +131,131 @@ namespace StockService.Services
                         product.Id, product.ReservedQuantity);
                 }
 
+
+                var orderServiceUrl = _configuration["Services:OrderService"] ?? "http://order-service";
+                var orderClient = _httpClientFactory.CreateClient();
+
+                var updateStatusRequest = new
+                {
+                    Status = "StockReserved" // OrderService'teki enum ismine göre
+                };
+
+                var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(updateStatusRequest), System.Text.Encoding.UTF8, "application/json");
+
+                var statusUpdateResponse = await orderClient.PutAsync($"{orderServiceUrl}/api/orders/status/{request.OrderId}", content);
+
+                if (!statusUpdateResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Sipariş {OrderId} durumu OrderService'e bildirilemedi: StockReserved. Hata: {Error}", request.OrderId, await statusUpdateResponse.Content.ReadAsStringAsync());
+                    // Stock transaction'ı geri al (Rollback)
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
                 await transaction.CommitAsync();
-                _logger.LogInformation("{OrderId} siparişi için stok güncellemesi (rezervasyonu) başarıyla tamamlandı", request.OrderId);
+                _logger.LogInformation("{OrderId} siparişi için stok rezervasyonu başarıyla tamamlandı ve sipariş durumu güncellendi", request.OrderId);
                 return true;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "{OrderId} siparişi için stok güncellenirken hata oluştu", request.OrderId);
+                throw;
+            }
+        }
+
+
+
+        public async Task<bool> ConfirmStockAsync(Guid orderId, bool approved)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                _logger.LogInformation("{OrderId} siparişi için stok konfirmasyonu işleniyor. Onaylandı: {Approved}", orderId, approved);
+
+                // İlgili stok işlemlerini bul
+                var stockTransactions = await _context.StockTransactions
+                    .Where(st => st.OrderId == orderId)
+                    .Include(st => st.Product)
+                    .ToListAsync();
+
+                if (!stockTransactions.Any())
+                {
+                    _logger.LogWarning("Sipariş {OrderId} için stok işlemi bulunamadı", orderId);
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
+                foreach (var stockTransaction in stockTransactions)
+                {
+                    var product = stockTransaction.Product;
+
+                    if (approved)
+                    {
+                        // Onaylandı: ReservedQuantity'den düş, StockQuantity'den de düş (kesinleştir)
+                        if (product.ReservedQuantity >= stockTransaction.Quantity)
+                        {
+                            product.ReservedQuantity -= stockTransaction.Quantity;
+                            product.StockQuantity -= stockTransaction.Quantity;
+                            product.UpdatedAt = DateTime.UtcNow;
+
+                            // İşlem notunu güncelle
+                            stockTransaction.Notes = $"{orderId} siparişi onaylandı ve stok kesinleştirildi";
+                            _context.StockTransactions.Update(stockTransaction);
+
+                            await _productRepository.UpdateAsync(product);
+
+                            _logger.LogInformation(
+                                "Ürün {ProductId} için stok onaylandı. Rezerve: {Reserved}, Toplam: {Total}",
+                                product.Id, product.ReservedQuantity, product.StockQuantity);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Ürün {ProductId} için rezerve stok yetersiz. İstenen: {Requested}, Mevcut Rezerve: {Reserved}",
+                                product.Id, stockTransaction.Quantity, product.ReservedQuantity);
+                            await transaction.RollbackAsync();
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        // Reddedildi: Sadece ReservedQuantity'den düş, StockQuantity'ye dokunma (iade et)
+                        if (product.ReservedQuantity >= stockTransaction.Quantity)
+                        {
+                            product.ReservedQuantity -= stockTransaction.Quantity;
+                            product.UpdatedAt = DateTime.UtcNow;
+
+                            // İşlem notunu güncelle
+                            stockTransaction.Notes = $"{orderId} siparişi reddedildi ve rezervasyon iade edildi";
+                            _context.StockTransactions.Update(stockTransaction);
+
+                            await _productRepository.UpdateAsync(product);
+
+                            _logger.LogInformation(
+                                "Ürün {ProductId} için rezervasyon iade edildi. Rezerve: {Reserved}, Toplam: {Total}",
+                                product.Id, product.ReservedQuantity, product.StockQuantity);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Ürün {ProductId} için rezerve stok yetersiz. İstenen: {Requested}, Mevcut Rezerve: {Reserved}",
+                                product.Id, stockTransaction.Quantity, product.ReservedQuantity);
+                            await transaction.RollbackAsync();
+                            return false;
+                        }
+                    }
+                }
+
+                await transaction.CommitAsync();
+                _logger.LogInformation("{OrderId} siparişi için stok konfirmasyonu başarıyla tamamlandı", orderId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "{OrderId} siparişi için stok konfirmasyonu işlenirken hata", orderId);
                 throw;
             }
         }
@@ -196,6 +319,57 @@ namespace StockService.Services
                 // Kullanılabilir Miktar = Toplam Stok - Rezerve Miktar
                 AvailableQuantity = product.StockQuantity - product.ReservedQuantity
             };
+        }
+
+        public async Task<bool> FinalizeStockAsync(UpdateStockRequest request)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                _logger.LogInformation("{OrderId} siparişi için stok kesinleştirme (deduction) işleniyor", request.OrderId);
+
+                foreach (var item in request.Items)
+                {
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+
+                    if (product == null || product.ReservedQuantity < item.Quantity)
+                    {
+                        _logger.LogError("Ürün {ProductId} bulunamadı veya rezerve edilen miktar yetersiz.", item.ProductId);
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    // Stok Kesinleştirme:
+                    product.StockQuantity -= item.Quantity; // Toplam Stoktan düş
+                    product.ReservedQuantity -= item.Quantity; // Rezerve Stoğu düş
+
+                    product.UpdatedAt = DateTime.UtcNow;
+
+                    var stockTransaction = new StockTransaction
+                    {
+                        ProductId = product.Id,
+                        OrderId = request.OrderId,
+                        Quantity = item.Quantity,
+                        Type = StockTransactionType.Sale,
+                        CreatedAt = DateTime.UtcNow,
+                        Notes = $"{request.OrderId} siparişi için stok kesinleştirildi ve düşüldü"
+                    };
+
+                    _context.StockTransactions.Add(stockTransaction);
+                    _context.Products.Update(product);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                _logger.LogInformation("{OrderId} siparişi için stok kesinleştirme başarıyla tamamlandı", request.OrderId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "{OrderId} siparişi için stok kesinleştirilirken hata oluştu", request.OrderId);
+                throw;
+            }
         }
     }
 }
