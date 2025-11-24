@@ -1,9 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Repository;
-using VerificationService.Consumers;
 using VerificationService.Data;
-using VerificationService.Models;
+using VerificationService.Models; 
 using VerificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,7 +38,7 @@ builder.Services.AddSingleton<IMessagePublisher, RabbitMQPublisher>();
 
 // Repository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<VerificationDbContext>());
-builder.Services.AddScoped<IRepository<VerificationRequest>, Repository<VerificationRequest>>();
+builder.Services.AddScoped<IRepository<VerificationRequestLog>, Repository<VerificationRequestLog>>();
 
 // Services
 builder.Services.AddScoped<IVerificationService, VerificationServiceImpl>();
