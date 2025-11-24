@@ -1,6 +1,5 @@
 ﻿using OrderService.DTOs;
-using OrderService.Models;
-
+using OrderService.Models; 
 namespace OrderService.Services
 {
     public interface IOrderService
@@ -8,6 +7,6 @@ namespace OrderService.Services
         Task<OrderResponse> CreateOrderAsync(CreateOrderRequest request);
         Task<OrderResponse?> GetOrderByIdAsync(Guid orderId);
         Task<IEnumerable<OrderResponse>> GetAllOrdersAsync();
-        Task<OrderResponse?> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus);
+       Task<OrderResponse?> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus);
     }
 }

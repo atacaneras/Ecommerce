@@ -2,8 +2,6 @@
 using OrderService.DTOs;
 using OrderService.Models;
 using OrderService.Services;
-using System; 
-using VerificationService.DTOs;
 
 namespace OrderService.Controllers
 {
@@ -69,7 +67,7 @@ namespace OrderService.Controllers
         }
 
         [HttpPut("status/{id}")]
-        public async Task<ActionResult<OrderResponse>> UpdateOrderStatus(Guid id, [FromBody] VerificationService.DTOs.UpdateOrderStatusRequest request)
+        public async Task<ActionResult<OrderResponse>> UpdateOrderStatus(Guid id, [FromBody] UpdateOrderStatusRequest request)
         {
             try
             {
@@ -80,12 +78,10 @@ namespace OrderService.Controllers
 
                 var order = await _orderService.UpdateOrderStatusAsync(id, newStatus);
 
-                // CRITICAL: CS0161 hatasını çözer
                 if (order == null)
                     return NotFound(new { message = $"Sipariş {id} bulunamadı" });
 
-                return Ok(order); // Başarılı sonucu döndürür
-
+                return Ok(order);
             }
             catch (Exception ex)
             {
@@ -93,6 +89,5 @@ namespace OrderService.Controllers
                 return StatusCode(500, new { message = "Sipariş durumu güncellenirken bir hata oluştu" });
             }
         }
-   
-}
+    }
 }

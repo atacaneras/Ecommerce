@@ -5,6 +5,7 @@ using OrderService.Services;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Repository;
 using RabbitMQ.Client;
+using OrderService.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,6 +87,7 @@ builder.Services.AddScoped<IRepository<Order>, Repository<Order>>();
 
 // Servisler
 builder.Services.AddScoped<IOrderService, OrderServiceImpl>();
+builder.Services.AddHostedService<OrderApprovedConsumer>();
 
 // Logging
 builder.Logging.ClearProviders();

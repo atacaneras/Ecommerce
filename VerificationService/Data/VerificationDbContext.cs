@@ -7,18 +7,17 @@ namespace VerificationService.Data
     {
         public VerificationDbContext(DbContextOptions<VerificationDbContext> options) : base(options) { }
 
-        public DbSet<VerificationRequestLog> VerificationRequestLogs { get; set; }
+        public DbSet<Verification> Verifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<VerificationRequestLog>(entity =>
+            modelBuilder.Entity<Verification>(entity =>
             {
                 entity.HasKey(e => e.Id);
-                entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.CustomerName).HasMaxLength(200);
                 entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
                 entity.HasIndex(e => e.OrderId);
                 entity.HasIndex(e => e.Status);
-                entity.HasIndex(e => e.RequestedAt);
             });
         }
     }

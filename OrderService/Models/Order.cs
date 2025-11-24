@@ -28,6 +28,7 @@
     public enum OrderStatus
     {
         Pending,
+        Approved,
         StockReserved,
         PaymentCompleted,
         Shipped,

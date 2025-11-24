@@ -26,4 +26,9 @@
         public DateTime CreatedAt { get; set; }
         public List<OrderItemDto> Items { get; set; } = new();
     }
+
+    public class UpdateOrderStatusRequest
+    {
+        public string Status { get; set; } = string.Empty;
+    }
 }

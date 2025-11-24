@@ -29,14 +29,14 @@ namespace OrderService.Services
             {
                 _logger.LogInformation("Müşteri için yeni sipariş oluşturuluyor: {CustomerName}", request.CustomerName);
 
-                // Sipariş entity'si oluştur
+                // 1. Sipariş entity'si oluştur (Status: Pending)
                 var order = new Order
                 {
                     Id = Guid.NewGuid(),
                     CustomerName = request.CustomerName,
                     CustomerEmail = request.CustomerEmail,
                     CustomerPhone = request.CustomerPhone,
-                    Status = OrderStatus.Pending,
+                    Status = OrderStatus.Pending, // Başlangıç durumu Pending
                     CreatedAt = DateTime.UtcNow,
                     Items = request.Items.Select(i => new OrderItem
                     {
@@ -50,11 +50,11 @@ namespace OrderService.Services
 
                 order.TotalAmount = order.Items.Sum(i => i.TotalPrice);
 
-                // Veritabanına kaydet
+                // 2. Veritabanına kaydet
                 await _orderRepository.AddAsync(order);
                 _logger.LogInformation("Sipariş {OrderId} veritabanına başarıyla kaydedildi", order.Id);
 
-                // Stok güncelleme mesajını yayınla
+                // 3. Stok güncelleme mesajını yayınla (Rezerve işlemi için)
                 var stockMessage = new StockUpdateMessage
                 {
                     OrderId = order.Id,
@@ -66,21 +66,22 @@ namespace OrderService.Services
                 };
 
                 await _messagePublisher.PublishAsync("stock-exchange", "stock.update", stockMessage);
-                _logger.LogInformation("Sipariş {OrderId} için stok güncelleme mesajı yayınlandı", order.Id);
+                _logger.LogInformation("Sipariş {OrderId} için stok rezervasyon mesajı yayınlandı", order.Id);
 
-                // Onay servisi için mesaj yayınla
-                var verificationMessage = new VerificationMessage
+                // 4. Onay servisi için DOĞRULAMA TALEBİ mesajı yayınla
+                var verificationMessage = new VerificationRequestMessage
                 {
                     OrderId = order.Id,
                     CustomerName = order.CustomerName,
                     CustomerEmail = order.CustomerEmail,
-                    TotalAmount = order.TotalAmount
+                    TotalAmount = order.TotalAmount,
+                    CreatedAt = order.CreatedAt
                 };
 
                 await _messagePublisher.PublishAsync("verification-exchange", "verification.create", verificationMessage);
                 _logger.LogInformation("Sipariş {OrderId} için onay talebi mesajı yayınlandı", order.Id);
 
-                // Bildirim mesajını yayınla
+                // 5. Bildirim mesajını yayınla
                 var notificationMessage = new NotificationMessage
                 {
                     OrderId = order.Id,
@@ -132,22 +133,30 @@ namespace OrderService.Services
 
         public async Task<OrderResponse?> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus)
         {
-            var order = await _orderRepository.GetByIdAsync(orderId);
-            if (order == null)
+            try
             {
-                _logger.LogWarning("Durumu güncellenecek sipariş {OrderId} bulunamadı", orderId);
-                return null;
+                var order = await _orderRepository.GetByIdAsync(orderId);
+                if (order == null)
+                {
+                    _logger.LogWarning("Durumu güncellenecek sipariş {OrderId} bulunamadı", orderId);
+                    return null;
+                }
+
+                _logger.LogInformation("Sipariş {OrderId} durum değişikliği: {OldStatus} -> {NewStatus}",
+                    orderId, order.Status, newStatus);
+
+                order.Status = newStatus;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                await _orderRepository.UpdateAsync(order);
+
+                return MapToResponse(order);
             }
-
-            _logger.LogInformation("Sipariş {OrderId} durum değişikliği: {OldStatus} -> {NewStatus}",
-                orderId, order.Status, newStatus);
-
-            order.Status = newStatus;
-            order.UpdatedAt = DateTime.UtcNow;
-
-            await _orderRepository.UpdateAsync(order);
-
-            return MapToResponse(order);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş durumu güncellenirken hata oluştu: {OrderId}", orderId);
+                throw;
+            }
         }
 
         private OrderResponse MapToResponse(Order order)

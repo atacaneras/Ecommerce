@@ -1,4 +1,6 @@
-﻿    # =====================================
+﻿   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+   
+   # =====================================
     #  E-Ticaret Mikroservis Başlatıcı
     # =====================================
 
@@ -83,6 +85,7 @@
         @{Display="Sipariş Servisi"; Url="http://localhost:5001/swagger"},
         @{Display="Stok Servisi"; Url="http://localhost:5002/swagger"},
         @{Display="Bildirim Servisi"; Url="http://localhost:5003/swagger"},
+        @{Display="Onay Servisi"; Url="http://localhost:5004/swagger"},
         @{Display="RabbitMQ Yönetim"; Url="http://localhost:15672"}
     )
 
