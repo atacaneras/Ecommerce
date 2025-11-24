@@ -116,6 +116,7 @@ using (var scope = app.Services.CreateScope())
         // Exchange'leri tanýmla
         channel.ExchangeDeclare("stock-exchange", ExchangeType.Direct, durable: true);
         channel.ExchangeDeclare("notification-exchange", ExchangeType.Direct, durable: true);
+        channel.ExchangeDeclare("verification-exchange", ExchangeType.Direct, durable: true); 
 
         logger.LogInformation("RabbitMQ exchange'leri baþarýyla baþlatýldý");
     }

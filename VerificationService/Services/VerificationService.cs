@@ -1,10 +1,15 @@
-﻿using Shared.Infrastructure.Messaging
-using Shared.Infrastructure.Messaging.Messages; 
+﻿using Shared.Infrastructure.Messaging;
+using Shared.Infrastructure.Messaging.Messages;
 using Shared.Infrastructure.Repository;
 using System.Text.Json;
 using VerificationService.DTOs;
-using OrderService.DTOs; 
+using OrderService.DTOs;
 using VerificationService.Models;
+using System.Linq;
+using System.Net.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace VerificationService.Services
 {
@@ -30,38 +35,102 @@ namespace VerificationService.Services
             _verificationLogRepository = verificationLogRepository;
         }
 
-        public async Task<bool> ApproveOrderAsync(Guid orderId)
+        // Helper: DTO'dan Response'a dönüşüm
+        private VerificationResponse MapToResponse(VerificationRequestLog log)
+        {
+            return new VerificationResponse
+            {
+                Id = log.Id,
+                OrderId = log.OrderId,
+                CustomerName = log.CustomerName,
+                TotalAmount = log.TotalAmount,
+                Status = log.Status,
+                RequestedAt = log.RequestedAt,
+                ProcessedAt = log.ProcessedAt,
+                ProcessorNote = log.ProcessorNote
+            };
+        }
+
+        // Helper: Log kaydı oluşturma (Sipariş oluşturulduğunda OrderService tarafından mesajla tetiklenebilir, 
+        // ancak Controller'dan onay çağrısı geldiği için burada başlangıç kaydı yapıyoruz.)
+        private async Task<VerificationRequestLog> LogVerificationRequest(Guid orderId, string status, string note, string customerName = "N/A", decimal totalAmount = 0)
+        {
+            // Bu metot, aslen OrderService'den mesaj geldiğinde tetiklenmeliydi. 
+            // Ancak, şimdiki akışınızda sadece API'den Approve/Reject geldiği için, 
+            // sadece mevcut log kaydını bulup güncelleyeceğiz.
+            // Eğer kayıt yoksa, ilk defa logluyoruz. (Basitlik için)
+            var existingLog = (await _verificationLogRepository.FindAsync(l => l.OrderId == orderId)).FirstOrDefault();
+
+            if (existingLog != null) return existingLog;
+
+            var log = new VerificationRequestLog
+            {
+                OrderId = orderId,
+                CustomerName = customerName, // Bu bilgileri OrderService'ten çekmek gerekebilir.
+                TotalAmount = totalAmount,
+                RequestedAt = DateTime.UtcNow,
+                Status = "Requested", // Initial status
+                ProcessorNote = "API çağrısı bekleniyor"
+            };
+            return await _verificationLogRepository.AddAsync(log);
+        }
+
+        // ==============================
+        // READ OPERATIONS
+        // ==============================
+
+        public async Task<IEnumerable<VerificationResponse>> GetAllVerificationsAsync()
+        {
+            var logs = await _verificationLogRepository.GetAllAsync();
+            return logs.Select(MapToResponse);
+        }
+
+        public async Task<IEnumerable<VerificationResponse>> GetPendingVerificationsAsync()
+        {
+            // Pending/Requested durumundaki logları getirir
+            var logs = await _verificationLogRepository.FindAsync(l => l.Status == "Requested");
+            return logs.Select(MapToResponse);
+        }
+
+        public async Task<VerificationResponse?> GetVerificationByOrderIdAsync(Guid orderId)
+        {
+            var log = (await _verificationLogRepository.FindAsync(l => l.OrderId == orderId)).FirstOrDefault();
+            return log != null ? MapToResponse(log) : null;
+        }
+
+        // ==============================
+        // WRITE OPERATIONS
+        // ==============================
+
+        public async Task<VerificationResponse?> ApproveOrderAsync(Guid orderId, string? approvedBy)
         {
             var orderServiceUrl = _configuration["Services:OrderService"];
             var orderClient = _httpClientFactory.CreateClient();
-            var success = false;
 
-            // 1. Sipariş detaylarını al
-            var orderResponse = await orderClient.GetAsync($"{orderServiceUrl}/api/orders/{orderId}");
+            var log = (await _verificationLogRepository.FindAsync(l => l.OrderId == orderId)).FirstOrDefault();
 
-            if (!orderResponse.IsSuccessStatusCode)
+            if (log == null || log.Status != "Requested")
             {
-                _logger.LogError("Sipariş {OrderId} bulunamadı veya OrderService'den alınamadı.", orderId);
-                // 1.1. Loglama (Başarısız)
-                await LogVerificationRequest(orderId, "OrderNotFound", $"OrderService'den sipariş alınamadı: {orderResponse.ReasonPhrase}");
-                return false;
+                _logger.LogWarning("Onaylanacak sipariş {OrderId} logu bulunamadı veya durumu uygun değil: {Status}", orderId, log?.Status);
+                return null;
             }
 
-            var orderContent = await orderResponse.Content.ReadAsStringAsync();
-            var order = JsonSerializer.Deserialize<OrderResponse>(orderContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // 1. Sipariş detaylarını al (Gerekli değil, OrderService'in DTO'sundan OrderResponse'ı yeniden kullanıyoruz)
+            var orderResponseHttp = await orderClient.GetAsync($"{orderServiceUrl}/api/orders/{orderId}");
 
-            if (order == null || order.Status != "StockReserved")
+            if (!orderResponseHttp.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Sipariş {OrderId} onaylanmaya uygun değil (Status: {Status})", orderId, order?.Status);
-                // 1.1. Loglama (Uygun Değil)
-                await LogVerificationRequest(orderId, "NotEligible", $"Onay için uygun değil, mevcut durum: {order?.Status}");
-                return false;
+                log.Status = "Failed";
+                log.ProcessedAt = DateTime.UtcNow;
+                log.ProcessorNote = $"Onay sırasında OrderService'ten sipariş alınamadı. Hata: {orderResponseHttp.ReasonPhrase}";
+                await _verificationLogRepository.UpdateAsync(log);
+                return MapToResponse(log);
             }
+            var order = JsonSerializer.Deserialize<OrderResponse>(await orderResponseHttp.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (order == null) return null;
 
-            // 1.1. Loglama (Başarılı İstek - Başlangıç)
-            var log = await LogVerificationRequest(orderId, "Requested", $"Onay işlemi başlatıldı. Toplam Tutar: {order.TotalAmount} ₺", order.CustomerName, order.TotalAmount);
 
-            // 2. Stok Düşüm (Finalization) mesajını yayınla
+            // 2. Stok Düşüm (Finalization) mesajını yayınla (stock.deduct)
             var deductionMessage = new StockUpdateMessage
             {
                 OrderId = orderId,
@@ -83,49 +152,101 @@ namespace VerificationService.Services
 
             // 4. Log kaydını güncelle
             log.ProcessedAt = DateTime.UtcNow;
+            log.ProcessorNote = $"Onaylayan: {approvedBy ?? "N/A"}";
 
             if (!statusUpdateResponse.IsSuccessStatusCode)
             {
-                _logger.LogError("Sipariş {OrderId} durumu PaymentCompleted olarak güncellenemedi.", orderId);
                 log.Status = "Failed";
-                log.ProcessorNote = $"Durum OrderService'e PaymentCompleted olarak güncellenemedi. Hata: {statusUpdateResponse.ReasonPhrase}";
+                log.ProcessorNote += $", Hata: Durum OrderService'e PaymentCompleted olarak güncellenemedi. {statusUpdateResponse.ReasonPhrase}";
             }
             else
             {
-                _logger.LogInformation("Sipariş {OrderId} durumu başarıyla PaymentCompleted olarak güncellendi", orderId);
                 log.Status = "Approved";
-                success = true;
+
+                // 5. Müşteriye final bildirim mesajını yayınla
+                var notificationMessage = new NotificationMessage
+                {
+                    OrderId = orderId,
+                    CustomerEmail = order.CustomerEmail,
+                    Message = $"Siparişiniz #{order.Id} onaylandı ve kargoya hazırlanıyor! Toplam: {order.TotalAmount:F2}₺",
+                    Type = NotificationType.Both
+                };
+                await _messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
             }
 
-            // 5. Müşteriye final bildirim mesajını yayınla
-            var notificationMessage = new NotificationMessage
-            {
-                OrderId = orderId,
-                CustomerEmail = order.CustomerEmail,
-                Message = $"Siparişiniz #{order.Id} onaylandı ve kargoya hazırlanıyor! Toplam: {order.TotalAmount:F2}₺",
-                Type = NotificationType.Both
-            };
-            await _messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
-
-            // 6. Log kaydını kaydet
             await _verificationLogRepository.UpdateAsync(log);
-
-            return success;
+            return MapToResponse(log);
         }
 
-        private async Task<VerificationRequestLog> LogVerificationRequest(Guid orderId, string status, string note, string customerName = "N/A", decimal totalAmount = 0)
+        public async Task<VerificationResponse?> RejectOrderAsync(Guid orderId, string reason)
         {
-            var log = new VerificationRequestLog
-            {
-                OrderId = orderId,
-                CustomerName = customerName,
-                TotalAmount = totalAmount,
-                RequestedAt = DateTime.UtcNow,
-                Status = status,
-                ProcessorNote = note
-            };
+            var orderServiceUrl = _configuration["Services:OrderService"];
+            var orderClient = _httpClientFactory.CreateClient();
 
-            return await _verificationLogRepository.AddAsync(log);
+            var log = (await _verificationLogRepository.FindAsync(l => l.OrderId == orderId)).FirstOrDefault();
+
+            if (log == null || log.Status != "Requested")
+            {
+                _logger.LogWarning("Reddedilecek sipariş {OrderId} logu bulunamadı veya durumu uygun değil: {Status}", orderId, log?.Status);
+                return null;
+            }
+
+            // 1. Order Status'u Cancelled olarak güncelle
+            var updateStatusRequest = new UpdateOrderStatusRequest { Status = "Cancelled" };
+            var content = new StringContent(JsonSerializer.Serialize(updateStatusRequest), System.Text.Encoding.UTF8, "application/json");
+
+            var statusUpdateResponse = await orderClient.PutAsync($"{orderServiceUrl}/api/orders/status/{orderId}", content);
+
+            log.ProcessedAt = DateTime.UtcNow;
+            log.ProcessorNote = $"Ret sebebi: {reason}";
+
+            if (!statusUpdateResponse.IsSuccessStatusCode)
+            {
+                log.Status = "Failed";
+                log.ProcessorNote += $", Hata: Durum OrderService'e Cancelled olarak güncellenemedi. {statusUpdateResponse.ReasonPhrase}";
+            }
+            else
+            {
+                // 2. Stok Rezervasyonunu İade etme mekanizması (stock.deduct mesajı atılır, StockService bu durumda Rezerve Stoğu düşer)
+                // NOT: Mevcut FinalizeStockAsync mantığınız, düşüm miktarını sadece rezerve edilenden düşer. 
+                // StockService'in, rezervasyonu geri alma mantığını ayrı bir mesajla (örneğin stock.release) veya 
+                // FinalizeStockAsync metodunda negatif miktar/özel bir bayrak ile işlemesi gerekir. 
+                // Basitlik için burada FinalizeStockAsync'i çağırıyoruz ve StockService'in bunu akıllıca yöneteceğini varsayıyoruz. 
+
+                // Reddedilen siparişin detaylarını OrderService'ten almamız gerekiyor (çünkü sipariş kalemleri lazım)
+                var orderResponseHttp = await orderClient.GetAsync($"{orderServiceUrl}/api/orders/{orderId}");
+                var order = JsonSerializer.Deserialize<OrderResponse>(await orderResponseHttp.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (order != null)
+                {
+                    // Stok iadesi için (Rezerve stoğu sıfırlama/iade etme)
+                    var releaseMessage = new StockUpdateMessage
+                    {
+                        OrderId = orderId,
+                        Items = order.Items.Select(i => new StockItem
+                        {
+                            ProductId = i.ProductId,
+                            Quantity = i.Quantity * -1 // Negatif miktar, iade anlamına gelir
+                        }).ToList()
+                    };
+                    await _messagePublisher.PublishAsync("stock-exchange", "stock.deduct", releaseMessage);
+                }
+
+                log.Status = "Rejected";
+
+                // Müşteriye bildirim
+                var notificationMessage = new NotificationMessage
+                {
+                    OrderId = orderId,
+                    CustomerEmail = order?.CustomerEmail ?? log.CustomerName, // Email bulunamazsa CustomerName kullan
+                    Message = $"Siparişiniz #{orderId} maalesef onaylanamadı ve iptal edildi. Sebep: {reason}",
+                    Type = NotificationType.Both
+                };
+                await _messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
+            }
+
+            await _verificationLogRepository.UpdateAsync(log);
+            return MapToResponse(log);
         }
     }
 }

@@ -23,6 +23,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Shared.Infrastructure\Shared.Infrastructure.csproj" />
+		<ProjectReference Include="..\VerificationService\VerificationService.csproj" />
 	</ItemGroup>
 
 </Project>

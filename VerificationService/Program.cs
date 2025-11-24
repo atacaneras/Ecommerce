@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Repository;
 using VerificationService.Data;
-using VerificationService.Models; 
+using VerificationService.Models;
 using VerificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,9 +44,6 @@ builder.Services.AddScoped<IRepository<VerificationRequestLog>, Repository<Verif
 // Services
 builder.Services.AddScoped<IVerificationService, VerificationServiceImpl>();
 builder.Services.AddHttpClient();
-
-// Background Consumer
-builder.Services.AddHostedService<VerificationConsumer>();
 
 // Logging
 builder.Logging.ClearProviders();

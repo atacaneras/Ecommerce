@@ -2,7 +2,7 @@
 using OrderService.DTOs;
 using OrderService.Models;
 using OrderService.Services;
-using System;
+using System; 
 using VerificationService.DTOs;
 
 namespace OrderService.Controllers
@@ -80,16 +80,19 @@ namespace OrderService.Controllers
 
                 var order = await _orderService.UpdateOrderStatusAsync(id, newStatus);
 
+                // CRITICAL: CS0161 hatasını çözer
                 if (order == null)
                     return NotFound(new { message = $"Sipariş {id} bulunamadı" });
 
-                return Ok(order);
+                return Ok(order); // Başarılı sonucu döndürür
+
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Sipariş {OrderId} durumu güncellenirken hata oluştu", id);
+                _logger.LogError(ex, "Sipariş {OrderId} durumu güncellenirken hata", id);
                 return StatusCode(500, new { message = "Sipariş durumu güncellenirken bir hata oluştu" });
             }
         }
-    }
+   
+}
 }

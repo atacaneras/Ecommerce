@@ -1,4 +1,6 @@
-﻿using RabbitMQ.Client;
+﻿// StockService/Consumers/StockDeductionConsumer.cs (CORRECTED)
+
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Messaging.Messages;
@@ -6,6 +8,8 @@ using StockService.DTOs;
 using StockService.Services;
 using System.Text;
 using System.Text.Json;
+using System.Linq;
+using System;
 
 namespace StockService.Consumers
 {
@@ -53,6 +57,8 @@ namespace StockService.Consumers
                 {
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
+
+                    // CRITICAL: Doğru mesaj tipi StockUpdateMessage kullanılmalı
                     var stockMessage = JsonSerializer.Deserialize<StockUpdateMessage>(message);
 
                     if (stockMessage != null)
@@ -60,6 +66,7 @@ namespace StockService.Consumers
                         using var scope = _serviceProvider.CreateScope();
                         var stockService = scope.ServiceProvider.GetRequiredService<IStockService>();
 
+                        // FinalizeStockAsync için UpdateStockRequest DTO'su oluşturuldu
                         var request = new UpdateStockRequest
                         {
                             OrderId = stockMessage.OrderId,
@@ -70,15 +77,18 @@ namespace StockService.Consumers
                             }).ToList()
                         };
 
+                        // CRITICAL: FinalizeStockAsync metodu çağrıldı. CS1501 hatasını çözer.
                         var success = await stockService.FinalizeStockAsync(request);
 
                         if (success)
                         {
                             _channel.BasicAck(ea.DeliveryTag, false);
+                            _logger.LogInformation("Sipariş {OrderId} için stok düşümü başarıyla işlendi", stockMessage.OrderId);
                         }
                         else
                         {
                             _channel.BasicNack(ea.DeliveryTag, false, true);
+                            _logger.LogWarning("Sipariş {OrderId} için stok düşümü işlenemedi. Mesaj tekrar kuyruğa eklendi.", stockMessage.OrderId);
                         }
                     }
                 }
@@ -90,6 +100,8 @@ namespace StockService.Consumers
             };
 
             _channel.BasicConsume("stock-deduct-queue", false, consumer);
+            _logger.LogInformation("Stok düşüm tüketici servisi başlatıldı");
+
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
 

@@ -43,9 +43,11 @@ builder.Services.AddScoped<IRepository<Product>, Repository<Product>>();
 
 // Servisler
 builder.Services.AddScoped<IStockService, StockServiceImpl>();
+builder.Services.AddHttpClient();
 
 // Arka plan tüketici
 builder.Services.AddHostedService<StockUpdateConsumer>();
+builder.Services.AddHostedService<StockDeductionConsumer>();
 
 // Logging
 builder.Logging.ClearProviders();

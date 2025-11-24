@@ -164,7 +164,66 @@ namespace StockService.Services
             }
         }
 
+        public async Task<ProductResponse?> GetProductByIdAsync(int productId)
+        {
+            try
+            {
+                var product = await _productRepository.GetByIdAsync(productId);
+                return product != null ? MapToResponse(product) : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ürün {ProductId} alınırken hata oluştu", productId);
+                throw;
+            }
+        }
 
+        public async Task<IEnumerable<ProductResponse>> GetAllProductsAsync()
+        {
+            try
+            {
+                var products = await _productRepository.GetAllAsync();
+                return products.Select(MapToResponse);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tüm ürünler alınırken hata oluştu");
+                throw;
+            }
+        }
+
+        public async Task<bool> CheckStockAvailabilityAsync(int productId, int quantity)
+        {
+            try
+            {
+                var product = await _productRepository.GetByIdAsync(productId);
+                if (product == null) return false;
+
+                // Mevcut kullanılabilir stoğu hesapla
+                var availableStock = product.StockQuantity - product.ReservedQuantity;
+                return availableStock >= quantity;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ürün {ProductId} için stok müsaitliği kontrol edilirken hata oluştu", productId);
+                throw;
+            }
+        }
+
+        private ProductResponse MapToResponse(Product product)
+        {
+            return new ProductResponse
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                StockQuantity = product.StockQuantity,
+                ReservedQuantity = product.ReservedQuantity,
+                // Kullanılabilir Miktar = Toplam Stok - Rezerve Miktar
+                AvailableQuantity = product.StockQuantity - product.ReservedQuantity
+            };
+        }
 
         public async Task<bool> ConfirmStockAsync(Guid orderId, bool approved)
         {
@@ -258,67 +317,6 @@ namespace StockService.Services
                 _logger.LogError(ex, "{OrderId} siparişi için stok konfirmasyonu işlenirken hata", orderId);
                 throw;
             }
-        }
-
-        public async Task<ProductResponse?> GetProductByIdAsync(int productId)
-        {
-            try
-            {
-                var product = await _productRepository.GetByIdAsync(productId);
-                return product != null ? MapToResponse(product) : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ürün {ProductId} alınırken hata oluştu", productId);
-                throw;
-            }
-        }
-
-        public async Task<IEnumerable<ProductResponse>> GetAllProductsAsync()
-        {
-            try
-            {
-                var products = await _productRepository.GetAllAsync();
-                return products.Select(MapToResponse);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Tüm ürünler alınırken hata oluştu");
-                throw;
-            }
-        }
-
-        public async Task<bool> CheckStockAvailabilityAsync(int productId, int quantity)
-        {
-            try
-            {
-                var product = await _productRepository.GetByIdAsync(productId);
-                if (product == null) return false;
-
-                // Mevcut kullanılabilir stoğu hesapla
-                var availableStock = product.StockQuantity - product.ReservedQuantity;
-                return availableStock >= quantity;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ürün {ProductId} için stok müsaitliği kontrol edilirken hata oluştu", productId);
-                throw;
-            }
-        }
-
-        private ProductResponse MapToResponse(Product product)
-        {
-            return new ProductResponse
-            {
-                Id = product.Id,
-                Name = product.Name,
-                Description = product.Description,
-                Price = product.Price,
-                StockQuantity = product.StockQuantity,
-                ReservedQuantity = product.ReservedQuantity,
-                // Kullanılabilir Miktar = Toplam Stok - Rezerve Miktar
-                AvailableQuantity = product.StockQuantity - product.ReservedQuantity
-            };
         }
 
         public async Task<bool> FinalizeStockAsync(UpdateStockRequest request)
