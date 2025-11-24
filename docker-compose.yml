@@ -76,6 +76,27 @@ services:
       retries: 5
     networks:
       - beymen-network
+ 
+      # PostgreSQL - Verification Database
+   
+  postgres-verification:
+    image: postgres:15
+    container_name: beymen-postgres-verification
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_DB: VerificationDb
+      POSTGRES_USER: verificationuser
+      POSTGRES_PASSWORD: verificationpass123
+    volumes:
+      - verification-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verificationuser -d VerificationDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beymen-network
 
   # Order Service
   order-service:
@@ -154,6 +175,31 @@ services:
       - beymen-network
     restart: on-failure
 
+# Verification Service
+  verification-service:
+    build:
+      context: .
+      dockerfile: VerificationService/Dockerfile
+    container_name: beymen-verification-service
+    ports:
+      - "5004:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres-verification;Database=VerificationDb;Username=verificationuser;Password=verificationpass123
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+      - RabbitMQ__Port=5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-verification:
+        condition: service_healthy
+    networks:
+      - beymen-network
+    restart: on-failure
+
 # Frontend
   frontend:
     build:
@@ -178,6 +224,7 @@ volumes:
   order-data:
   stock-data:
   notification-data:
+  verification-data:
 
 networks:
   beymen-network:
