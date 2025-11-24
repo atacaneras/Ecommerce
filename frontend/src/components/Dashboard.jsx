@@ -57,18 +57,24 @@ export default function Dashboard() {
       const res = await fetch(`${STOCK_API}/api/stock/products`);
       if (res.ok) {
         const data = await res.json();
-        // Ürün listesini yükledikten sonra, sipariş formunda ilk ürünü varsayılan olarak ayarla
+        
+        // --- DÜZELTME: Otomatik ürün atama mantığı kaldırıldı ---
+        // Bu mantık, her 5 saniyede bir state'i sıfırlıyordu.
+        /*
         if (data && data.length > 0 && !formData.items[0].productId) {
-    setFormData(prev => ({
-        ...prev,
-        items: [{ 
-            productId: data[0].id, 
-            productName: data[0].name, 
-            quantity: 1, 
-            unitPrice: data[0].price 
-        }]
-    }));
-}
+            setFormData(prev => ({
+                ...prev,
+                items: [{ 
+                    productId: data[0].id, 
+                    productName: data[0].name, 
+                    quantity: 1, 
+                    unitPrice: data[0].price 
+                }]
+            }));
+        }
+        */
+        // ----------------------------------------------------
+        
         setProducts(data || []);
       }
     } catch (err) {
@@ -144,12 +150,18 @@ export default function Dashboard() {
         const result = await res.json();
         alert(`Sipariş başarıyla oluşturuldu! Sipariş ID: ${result.id.substring(0, 8)}... Durum: ${result.status}`);
         
-        setFormData({
+        // Formu sıfırla, ancak ürün seçimini koru
+        setFormData(prev => ({
           customerName: '',
           customerEmail: '',
           customerPhone: '',
-          items: [{ productId: formData.items[0].productId, productName: formData.items[0].productName, quantity: 1, unitPrice: formData.items[0].unitPrice }]
-        });
+          items: [{ 
+              productId: prev.items[0].productId, 
+              productName: prev.items[0].productName, 
+              quantity: 1, 
+              unitPrice: prev.items[0].unitPrice 
+          }]
+        }));
         fetchOrders();
         fetchProducts(); 
       } else {

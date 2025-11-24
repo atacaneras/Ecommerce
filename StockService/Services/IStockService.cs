@@ -8,8 +8,7 @@ namespace StockService.Services
         Task<ProductResponse?> UpdateProductAsync(int productId, UpdateProductRequest request);
         Task<bool> DeleteProductAsync(int productId);
 
-        Task<bool> ReserveStockAsync(UpdateStockRequest request); // İsim UpdateStockAsync'den ReserveStockAsync olarak değiştirildi
-        Task<bool> FinalizeStockAsync(UpdateStockRequest request); // Yeni metod
+        Task<bool> UpdateStockAsync(UpdateStockRequest request);
         Task<bool> CheckStockAvailabilityAsync(int productId, int quantity);
 
         Task<ProductResponse?> GetProductByIdAsync(int productId);

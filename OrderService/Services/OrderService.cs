@@ -4,7 +4,6 @@ using OrderService.Models;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Messaging.Messages;
 using Shared.Infrastructure.Repository;
-using System.Linq;
 
 namespace OrderService.Services
 {
@@ -37,7 +36,7 @@ namespace OrderService.Services
                     CustomerName = request.CustomerName,
                     CustomerEmail = request.CustomerEmail,
                     CustomerPhone = request.CustomerPhone,
-                    Status = OrderStatus.Pending, // Başlangıç durumu Pending
+                    Status = OrderStatus.Pending, // Türkçe enum kullanıldı
                     CreatedAt = DateTime.UtcNow,
                     Items = request.Items.Select(i => new OrderItem
                     {
@@ -55,30 +54,27 @@ namespace OrderService.Services
                 await _orderRepository.AddAsync(order);
                 _logger.LogInformation("Sipariş {OrderId} veritabanına başarıyla kaydedildi", order.Id);
 
-                // Verification Service'e mesaj gönder (Öncelikle stok rezerve edilecek)
-                var verificationMessage = new VerificationMessage
+                // Stok güncelleme mesajını yayınla
+                var stockMessage = new StockUpdateMessage
                 {
                     OrderId = order.Id,
-                    CustomerName = order.CustomerName,
-                    CustomerEmail = order.CustomerEmail,
-                    Items = order.Items.Select(i => new VerificationItem
+                    Items = order.Items.Select(i => new StockItem
                     {
                         ProductId = i.ProductId,
                         Quantity = i.Quantity
                     }).ToList()
                 };
 
-                // Stok rezervasyonu için mesajı VerificationService'e gönder
-                await _messagePublisher.PublishAsync("verification-exchange", "verification.reserve", verificationMessage);
-                _logger.LogInformation("Sipariş {OrderId} için doğrulama (rezervasyon) mesajı yayınlandı", order.Id);
+                await _messagePublisher.PublishAsync("stock-exchange", "stock.update", stockMessage);
+                _logger.LogInformation("Sipariş {OrderId} için stok güncelleme mesajı yayınlandı", order.Id);
 
-                // Bildirim mesajını yayınla (Sipariş alındı)
+                // Bildirim mesajını yayınla
                 var notificationMessage = new NotificationMessage
                 {
                     OrderId = order.Id,
                     CustomerEmail = order.CustomerEmail,
                     CustomerPhone = order.CustomerPhone,
-                    Message = $"Siparişiniz #{order.Id} alındı ve onayınızı bekliyor. Toplam: {order.TotalAmount:F2}₺",
+                    Message = $"Siparişiniz #{order.Id} alındı ve işleniyor. Toplam: {order.TotalAmount:F2}₺",
                     Type = NotificationType.Both
                 };
 

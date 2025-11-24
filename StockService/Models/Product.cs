@@ -30,7 +30,6 @@
         Purchase,
         Sale,
         Return,
-        Adjustment,
-        Reserved
+        Adjustment
     }
 }

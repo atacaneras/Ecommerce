@@ -84,19 +84,25 @@ namespace StockService.Controllers
             }
         }
 
-        /// <summary>
-        /// Stok miktarını günceller (Manuel stok girişi gibi düşünülmüştür, rezervasyon değil).
-        /// Not: Bu metot artık sipariş akışının parçası değildir ve devre dışı bırakılmıştır.
-        /// </summary>
         [HttpPost("update")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public Task<IActionResult> UpdateStock([FromBody] UpdateStockRequest request)
+        public async Task<IActionResult> UpdateStock([FromBody] UpdateStockRequest request)
         {
-            // CS1061 hatası çözüldü. Metot kaldırıldı ve yerine uyarı mesajı dönüldü.
-            _logger.LogWarning("Stok Controller'daki UpdateStock metodu devre dışı bırakıldı. Bu endpoint, sipariş akışının parçası değildir.");
-            return Task.FromResult<IActionResult>(StatusCode(403, new { message = "Bu endpoint sipariş akışı için kullanılmaz. Lütfen `/api/stock/{id}` PUT metodunu kullanın." }));
+            try
+            {
+                var result = await _stockService.UpdateStockAsync(request);
+                if (result)
+                    return Ok(new { message = "Stok başarıyla güncellendi" });
+
+                return BadRequest(new { message = "Stok güncellenemedi (örn. ürün bulunamadı veya stok yetersiz)" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stok güncellenirken hata oluştu");
+                return StatusCode(500, new { message = "Stok güncellenirken bir hata oluştu" });
+            }
         }
 
         [HttpGet("products")]
