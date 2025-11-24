@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Package, Bell, Plus, Loader, AlertCircle, CheckCircle, Trash2, ArrowRight } from 'lucide-react';
+import { ShoppingCart, Package, Bell, Plus, Loader, AlertCircle, CheckCircle, Trash2, ArrowRight, ClipboardCheck } from 'lucide-react';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [verifications, setVerifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('orders');
   const [formData, setFormData] = useState({
     customerName: '',
     customerEmail: '',
     customerPhone: '',
-    // Sipariş oluştururken ProductId, Quantity ve UnitPrice gereklidir.
-    // ProductName sadece görüntü amaçlıdır.
     items: [{ productId: '', productName: '', quantity: 1, unitPrice: 0 }]
   });
   const [newProduct, setNewProduct] = useState({
@@ -25,15 +24,18 @@ export default function Dashboard() {
   const API_BASE = 'http://localhost:5001';
   const STOCK_API = 'http://localhost:5002';
   const NOTIFICATION_API = 'http://localhost:5003';
+  const VERIFICATION_API = 'http://localhost:5004';
 
   useEffect(() => {
     fetchOrders();
     fetchProducts();
     fetchNotifications();
+    fetchVerifications();
     const interval = setInterval(() => {
       fetchOrders();
       fetchProducts();
       fetchNotifications();
+      fetchVerifications();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -43,7 +45,6 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/api/orders`);
       if (res.ok) {
         const data = await res.json();
-        // İstenen: Yeni olandan eskiye sırala (tersi)
         const sortedData = (data || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setOrders(sortedData);
       }
@@ -57,24 +58,6 @@ export default function Dashboard() {
       const res = await fetch(`${STOCK_API}/api/stock/products`);
       if (res.ok) {
         const data = await res.json();
-        
-        // --- DÜZELTME: Otomatik ürün atama mantığı kaldırıldı ---
-        // Bu mantık, her 5 saniyede bir state'i sıfırlıyordu.
-        /*
-        if (data && data.length > 0 && !formData.items[0].productId) {
-            setFormData(prev => ({
-                ...prev,
-                items: [{ 
-                    productId: data[0].id, 
-                    productName: data[0].name, 
-                    quantity: 1, 
-                    unitPrice: data[0].price 
-                }]
-            }));
-        }
-        */
-        // ----------------------------------------------------
-        
         setProducts(data || []);
       }
     } catch (err) {
@@ -94,6 +77,18 @@ export default function Dashboard() {
     }
   };
 
+  const fetchVerifications = async () => {
+    try {
+      const res = await fetch(`${VERIFICATION_API}/api/verification`);
+      if (res.ok) {
+        const data = await res.json();
+        setVerifications(data || []);
+      }
+    } catch (err) {
+      console.error('Doğrulamalar yüklenemedi:', err);
+    }
+  };
+
   const handleProductChange = (e) => {
     const selectedProductId = parseInt(e.target.value);
     const selectedProduct = products.find(p => p.id === selectedProductId);
@@ -109,7 +104,6 @@ export default function Dashboard() {
         setFormData({...formData, items});
     }
   };
-
 
   const createOrder = async (e) => {
     e.preventDefault();
@@ -150,7 +144,6 @@ export default function Dashboard() {
         const result = await res.json();
         alert(`Sipariş başarıyla oluşturuldu! Sipariş ID: ${result.id.substring(0, 8)}... Durum: ${result.status}`);
         
-        // Formu sıfırla, ancak ürün seçimini koru
         setFormData(prev => ({
           customerName: '',
           customerEmail: '',
@@ -164,6 +157,7 @@ export default function Dashboard() {
         }));
         fetchOrders();
         fetchProducts(); 
+        fetchVerifications();
       } else {
         const errorData = await res.json();
         alert('Sipariş oluşturulamadı. Hata: ' + (errorData.message || res.statusText));
@@ -234,37 +228,35 @@ export default function Dashboard() {
     }
     setLoading(true);
     try {
-        // Doğrudan Verification Service API'sini çağırıyoruz
-        const VERIFICATION_API = 'http://localhost:5004'; // Yeni servis için
-        
         const res = await fetch(`${VERIFICATION_API}/api/verification/approve/${orderId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
         });
 
         if (res.ok) {
-            alert('Sipariş başarıyla onaylandı ve stok güncelleniyor!');
+            alert('Sipariş başarıyla onaylandı!');
+            fetchOrders();
+            fetchVerifications();
+            fetchProducts();
         } else {
             const errorData = await res.json();
             alert('Sipariş onaylanırken hata oluştu: ' + (errorData.message || res.statusText));
         }
-        
-        fetchOrders(); // Sipariş durumunu güncelle
     } catch (err) {
         alert('Onaylama sırasında bağlantı hatası: ' + err.message);
     } finally {
         setLoading(false);
     }
-  }
-
+  };
 
   const getStatusColor = (status) => {
     const colors = {
       'Pending': 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
       'StockReserved': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+      'Approved': 'bg-green-500/20 text-green-300 border-green-500/30',
       'PaymentCompleted': 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       'Shipped': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-      'Delivered': 'bg-green-500/20 text-green-300 border-green-500/30',
+      'Delivered': 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       'Cancelled': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
       'Failed': 'bg-red-500/20 text-red-300 border-red-500/30'
     };
@@ -272,7 +264,6 @@ export default function Dashboard() {
   };
   
   const getProductDisplayInfo = (product) => {
-      // StockQuantity = İlk stok miktarını temsil ediyor
       const initialStock = product.stockQuantity; 
       const reserved = product.reservedQuantity;
       const available = product.availableQuantity;
@@ -289,7 +280,9 @@ export default function Dashboard() {
               </p>
           </>
       );
-  }
+  };
+
+  const pendingVerifications = verifications.filter(v => v.status === 'Pending');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -318,6 +311,7 @@ export default function Dashboard() {
           <div className="flex gap-1">
             {[
               { id: 'orders', label: `Siparişler (${orders.length})`, icon: ShoppingCart },
+              { id: 'verifications', label: `Sipariş Onay (${pendingVerifications.length})`, icon: ClipboardCheck },
               { id: 'products', label: `Ürünler (${products.length})`, icon: Package },
               { id: 'notifications', label: `Bildirimler (${notifications.length})`, icon: Bell }
             ].map(tab => (
@@ -451,20 +445,9 @@ export default function Dashboard() {
                             <p className="text-white font-semibold">{order.customerName}</p>
                             <p className="text-slate-400 text-sm">{order.customerEmail}</p>
                           </div>
-                          <div className='flex flex-col items-end gap-2'>
-                            <span className={`px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(order.status)}`}>
-                                {order.status}
-                            </span>
-                            {order.status === 'StockReserved' && (
-                                <button 
-                                    onClick={() => approveOrder(order.id)}
-                                    disabled={loading}
-                                    className="px-3 py-1 bg-green-600/20 text-green-300 text-xs font-medium rounded-full border border-green-600 hover:bg-green-600 hover:text-white transition-all disabled:opacity-50 flex items-center gap-1"
-                                >
-                                    Onayla <ArrowRight className='w-3 h-3' />
-                                </button>
-                            )}
-                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-semibold border ${getStatusColor(order.status)}`}>
+                              {order.status}
+                          </span>
                         </div>
                         <p className="text-blue-400 font-bold">{order.totalAmount.toFixed(2)} ₺</p>
                         <div className="text-slate-400 text-xs mt-1 flex justify-between">
@@ -484,6 +467,47 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Verification Tab */}
+        {activeTab === 'verifications' && (
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5" />
+              Onay Bekleyen Siparişler
+            </h2>
+            {pendingVerifications.length === 0 ? (
+              <div className="text-slate-400 text-center py-12">
+                <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                Onay bekleyen sipariş yok
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[80vh] overflow-y-auto pr-2">
+                {pendingVerifications.map(verification => (
+                  <div key={verification.id} className="bg-slate-700 rounded-lg p-4 border border-yellow-500/30 hover:bg-slate-600/50 transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <p className="text-white font-semibold text-lg">{verification.customerName}</p>
+                        <p className="text-slate-300 text-sm mt-1">Sipariş ID: {verification.orderId.substring(0, 8)}...</p>
+                        <p className="text-blue-400 font-bold text-xl mt-2">{verification.totalAmount.toFixed(2)} ₺</p>
+                        <p className="text-slate-400 text-xs mt-2">
+                          {new Date(verification.createdAt).toLocaleString('tr-TR')}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => approveOrder(verification.orderId)}
+                        disabled={loading}
+                        className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {loading ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        Onayla
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

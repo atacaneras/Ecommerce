@@ -57,7 +57,9 @@ namespace StockService.Consumers
 
                     if (message != null)
                     {
-                        // Bu sipariş için daha önce yapılan rezervasyonları bul (StockTransaction)
+                        _logger.LogInformation("Sipariş {OrderId} için onay alındı, stok kesinleştiriliyor", message.OrderId);
+
+                        // Bu sipariş için daha önce yapılan rezervasyonları bul
                         var transactions = await dbContext.StockTransactions
                             .Where(t => t.OrderId == message.OrderId && t.Type == StockTransactionType.Sale)
                             .ToListAsync();
@@ -69,19 +71,38 @@ namespace StockService.Consumers
                                 var product = await dbContext.Products.FindAsync(tx.ProductId);
                                 if (product != null)
                                 {
-                                    // 1. Rezerve miktarı düş (çünkü artık satış kesinleşti)
-                                    product.ReservedQuantity -= tx.Quantity;
+                                    // Rezerve edilen miktarı düş
+                                    // StockQuantity zaten rezerve edildiğinde güncellenmiyor,
+                                    // sadece ReservedQuantity artırılmıştı
+                                    // Şimdi onay geldiği için ReservedQuantity'i düş ve StockQuantity'den düş
 
-                                    // 2. Ana stoktan düş
-                                    product.StockQuantity -= tx.Quantity;
+                                    if (product.ReservedQuantity >= tx.Quantity)
+                                    {
+                                        product.ReservedQuantity -= tx.Quantity;
+                                        product.StockQuantity -= tx.Quantity;
+                                        product.UpdatedAt = DateTime.UtcNow;
 
-                                    product.UpdatedAt = DateTime.UtcNow;
-
-                                    _logger.LogInformation("Ürün {ProductId} stoğu kesinleştirildi. Stok: {Stock}, Rezerve: {Reserved}",
-                                        product.Id, product.StockQuantity, product.ReservedQuantity);
+                                        _logger.LogInformation(
+                                            "Ürün {ProductId} için stok kesinleştirildi. " +
+                                            "Düşülen miktar: {Quantity}, " +
+                                            "Yeni Stok: {Stock}, Yeni Rezerve: {Reserved}",
+                                            product.Id, tx.Quantity, product.StockQuantity, product.ReservedQuantity);
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning(
+                                            "Ürün {ProductId} için rezerve stok yetersiz. " +
+                                            "Beklenen: {Expected}, Mevcut: {Available}",
+                                            product.Id, tx.Quantity, product.ReservedQuantity);
+                                    }
                                 }
                             }
                             await dbContext.SaveChangesAsync();
+                            _logger.LogInformation("Sipariş {OrderId} için stok başarıyla kesinleştirildi", message.OrderId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Sipariş {OrderId} için stok transaction bulunamadı", message.OrderId);
                         }
                     }
                     _channel.BasicAck(ea.DeliveryTag, false);
@@ -94,6 +115,8 @@ namespace StockService.Consumers
             };
 
             _channel.BasicConsume("stock-verification-queue", false, consumer);
+            _logger.LogInformation("Stok onay tüketicisi başlatıldı");
+
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
 

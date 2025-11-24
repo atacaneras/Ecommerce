@@ -8,14 +8,14 @@ using VerificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CORS Policy
+// CORS Policy Name
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS
+// CORS: Allow frontend requests
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins,
@@ -81,6 +81,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Enable CORS
 app.UseCors(MyAllowSpecificOrigins);
+
 app.MapControllers();
+
 app.Run();
