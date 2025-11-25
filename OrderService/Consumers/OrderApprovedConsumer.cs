@@ -50,6 +50,7 @@ namespace OrderService.Consumers
             {
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+                var messagePublisher = scope.ServiceProvider.GetRequiredService<IMessagePublisher>();
 
                 try
                 {
@@ -65,6 +66,22 @@ namespace OrderService.Consumers
                             order.UpdatedAt = DateTime.UtcNow;
                             await dbContext.SaveChangesAsync();
                             _logger.LogInformation("Sipariş {OrderId} durumu APPROVED olarak güncellendi.", message.OrderId);
+
+                            // Bildirim mesajını yayınla (Sipariş Onaylandı) - Hemen gönderilmeli
+                            var notificationMessage = new NotificationMessage
+                            {
+                                OrderId = order.Id,
+                                CustomerName = order.CustomerName,
+                                CustomerEmail = order.CustomerEmail,
+                                CustomerPhone = order.CustomerPhone,
+                                // İstenen mesaj: "siparişiniz onaylandı"
+                                Message = $"Siparişiniz #{order.Id.ToString().Substring(0, 8)}... başarıyla onaylandı.",
+                                Type = NotificationType.Both,
+                                ShouldSendImmediately = true // Onay bildirimi hemen gönderilmeli
+                            };
+                            await messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
+                            _logger.LogInformation("Sipariş {OrderId} için onay bildirimi yayınlandı. Pending bildirimler de gönderilecek.", order.Id);
+
                         }
                     }
                     _channel.BasicAck(ea.DeliveryTag, false);

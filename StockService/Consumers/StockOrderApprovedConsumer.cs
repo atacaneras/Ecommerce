@@ -71,10 +71,6 @@ namespace StockService.Consumers
                                 var product = await dbContext.Products.FindAsync(tx.ProductId);
                                 if (product != null)
                                 {
-                                    // Rezerve edilen miktarı düş
-                                    // StockQuantity zaten rezerve edildiğinde güncellenmiyor,
-                                    // sadece ReservedQuantity artırılmıştı
-                                    // Şimdi onay geldiği için ReservedQuantity'i düş ve StockQuantity'den düş
 
                                     if (product.ReservedQuantity >= tx.Quantity)
                                     {

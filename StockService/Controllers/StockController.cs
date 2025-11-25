@@ -142,5 +142,26 @@ namespace StockService.Controllers
                 return StatusCode(500, new { message = "Ürün getirilirken bir hata oluştu" });
             }
         }
+
+        [HttpPost("cancel/{orderId}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CancelOrder(Guid orderId)
+        {
+            try
+            {
+                var result = await _stockService.CancelOrderAsync(orderId);
+                if (result)
+                    return Ok(new { message = "Sipariş stokları başarıyla iptal edildi" });
+
+                return BadRequest(new { message = "Sipariş stokları iptal edilemedi" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş stokları iptal edilirken hata oluştu: {OrderId}", orderId);
+                return StatusCode(500, new { message = "Sipariş stokları iptal edilirken bir hata oluştu" });
+            }
+        }
     }
 }

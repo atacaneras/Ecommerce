@@ -66,10 +66,12 @@ namespace NotificationService.Consumers
                         var request = new SendNotificationRequest
                         {
                             OrderId = notificationMessage.OrderId,
+                            CustomerName = notificationMessage.CustomerName,
                             Email = notificationMessage.CustomerEmail,
                             Phone = notificationMessage.CustomerPhone,
                             Message = notificationMessage.Message,
-                            Type = notificationMessage.Type.ToString()
+                            Type = notificationMessage.Type.ToString(),
+                            ShouldSendImmediately = notificationMessage.ShouldSendImmediately
                         };
 
                         var success = await notificationService.SendNotificationAsync(request);

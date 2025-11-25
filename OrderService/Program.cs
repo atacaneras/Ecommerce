@@ -9,7 +9,7 @@ using OrderService.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CORS Politikasý Adý
+// CORS Politikasï¿½ Adï¿½
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 // Servisleri ekle
@@ -17,7 +17,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS Tanýmlamasý: Frontend adresinden gelen isteklere izin veriyoruz
+// CORS Tanï¿½mlamasï¿½: Frontend adresinden gelen isteklere izin veriyoruz
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(name: MyAllowSpecificOrigins,
@@ -29,11 +29,11 @@ builder.Services.AddCors(options =>
                       });
 });
 
-// Veritabaný
+// Veritabanï¿½
 builder.Services.AddDbContext<OrderDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// RabbitMQ - Lazy initialization ile hazýr olmasýný bekle
+// RabbitMQ - Lazy initialization ile hazï¿½r olmasï¿½nï¿½ bekle
 var rabbitMQSettings = new RabbitMQSettings();
 builder.Configuration.GetSection("RabbitMQ").Bind(rabbitMQSettings);
 builder.Services.AddSingleton(rabbitMQSettings);
@@ -44,7 +44,7 @@ builder.Services.AddSingleton<IMessagePublisher>(sp =>
     var logger = sp.GetRequiredService<ILogger<RabbitMQPublisher>>();
     var settings = sp.GetRequiredService<RabbitMQSettings>();
 
-    logger.LogInformation("RabbitMQ Yayýmcýsý baþlatýlýyor...");
+    logger.LogInformation("RabbitMQ Yayï¿½mcï¿½sï¿½ baï¿½latï¿½lï¿½yor...");
 
     var maxWaitSeconds = 60;
     var waitedSeconds = 0;
@@ -53,24 +53,24 @@ builder.Services.AddSingleton<IMessagePublisher>(sp =>
     {
         try
         {
-            logger.LogInformation("RabbitMQ'ya baðlanmaya çalýþýlýyor {Host}:{Port} (Beklenen süre: {Seconds}s)",
+            logger.LogInformation("RabbitMQ'ya baï¿½lanmaya ï¿½alï¿½ï¿½ï¿½lï¿½yor {Host}:{Port} (Beklenen sï¿½re: {Seconds}s)",
                 settings.Host, settings.Port, waitedSeconds);
 
             var publisher = new RabbitMQPublisher(settings, logger);
-            logger.LogInformation("RabbitMQ Yayýmcýsý baþarýyla baþlatýldý!");
+            logger.LogInformation("RabbitMQ Yayï¿½mcï¿½sï¿½ baï¿½arï¿½yla baï¿½latï¿½ldï¿½!");
             return publisher;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "RabbitMQ henüz hazýr deðil, 2 saniye bekleniyor... ({Waited}/{Max} saniye)",
+            logger.LogWarning(ex, "RabbitMQ henï¿½z hazï¿½r deï¿½il, 2 saniye bekleniyor... ({Waited}/{Max} saniye)",
                 waitedSeconds, maxWaitSeconds);
 
             if (waitedSeconds >= maxWaitSeconds)
             {
-                logger.LogError("RabbitMQ'ya {Seconds} saniye sonunda baðlanýlamadý", maxWaitSeconds);
+                logger.LogError("RabbitMQ'ya {Seconds} saniye sonunda baï¿½lanï¿½lamadï¿½", maxWaitSeconds);
                 throw new InvalidOperationException(
-                    $"RabbitMQ'ya {settings.Host}:{settings.Port} adresinden {maxWaitSeconds} saniye sonunda baðlanýlamadý. " +
-                    "Lütfen RabbitMQ'nun çalýþýr ve eriþilebilir olduðunu kontrol edin.", ex);
+                    $"RabbitMQ'ya {settings.Host}:{settings.Port} adresinden {maxWaitSeconds} saniye sonunda baï¿½lanï¿½lamadï¿½. " +
+                    "Lï¿½tfen RabbitMQ'nun ï¿½alï¿½ï¿½ï¿½r ve eriï¿½ilebilir olduï¿½unu kontrol edin.", ex);
             }
 
             Thread.Sleep(2000);
@@ -78,12 +78,15 @@ builder.Services.AddSingleton<IMessagePublisher>(sp =>
         }
     }
 
-    throw new InvalidOperationException("RabbitMQ Yayýmcýsý baþlatýlamadý");
+    throw new InvalidOperationException("RabbitMQ Yayï¿½mcï¿½sï¿½ baï¿½latï¿½lamadï¿½");
 });
 
 // Repository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<OrderDbContext>());
 builder.Services.AddScoped<IRepository<Order>, Repository<Order>>();
+
+// HttpClient
+builder.Services.AddHttpClient();
 
 // Servisler
 builder.Services.AddScoped<IOrderService, OrderServiceImpl>();
@@ -96,13 +99,13 @@ builder.Logging.AddDebug();
 
 var app = builder.Build();
 
-// RabbitMQ exchange ve queue'larý baþlat
+// RabbitMQ exchange ve queue'larï¿½ baï¿½lat
 using (var scope = app.Services.CreateScope())
 {
     try
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("RabbitMQ exchange'leri baþlatýlýyor...");
+        logger.LogInformation("RabbitMQ exchange'leri baï¿½latï¿½lï¿½yor...");
 
         var factory = new ConnectionFactory
         {
@@ -115,42 +118,42 @@ using (var scope = app.Services.CreateScope())
         using var connection = factory.CreateConnection();
         using var channel = connection.CreateModel();
 
-        // Exchange'leri tanýmla
+        // Exchange'leri tanï¿½mla
         channel.ExchangeDeclare("stock-exchange", ExchangeType.Direct, durable: true);
         channel.ExchangeDeclare("notification-exchange", ExchangeType.Direct, durable: true);
         channel.ExchangeDeclare("verification-exchange", ExchangeType.Direct, durable: true); 
 
-        logger.LogInformation("RabbitMQ exchange'leri baþarýyla baþlatýldý");
+        logger.LogInformation("RabbitMQ exchange'leri baï¿½arï¿½yla baï¿½latï¿½ldï¿½");
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "RabbitMQ exchange'leri baþlatýlamadý. Servis çalýþmaya devam edecek ancak mesajlaþma baþarýsýz olabilir.");
+        logger.LogError(ex, "RabbitMQ exchange'leri baï¿½latï¿½lamadï¿½. Servis ï¿½alï¿½ï¿½maya devam edecek ancak mesajlaï¿½ma baï¿½arï¿½sï¿½z olabilir.");
     }
 }
 
-// Veritabaný migrasyonu
+// Veritabanï¿½ migrasyonu
 using (var scope = app.Services.CreateScope())
 {
     try
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("Veritabaný migrasyonlarý çalýþtýrýlýyor...");
+        logger.LogInformation("Veritabanï¿½ migrasyonlarï¿½ ï¿½alï¿½ï¿½tï¿½rï¿½lï¿½yor...");
 
         var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
         dbContext.Database.Migrate();
 
-        logger.LogInformation("Veritabaný migrasyonlarý baþarýyla tamamlandý");
+        logger.LogInformation("Veritabanï¿½ migrasyonlarï¿½ baï¿½arï¿½yla tamamlandï¿½");
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Veritabaný migrasyonu baþarýsýz oldu: {Message}", ex.Message);
+        logger.LogError(ex, "Veritabanï¿½ migrasyonu baï¿½arï¿½sï¿½z oldu: {Message}", ex.Message);
 
-        // PostgreSQL yoksa InMemory kullan (geliþtirme için)
+        // PostgreSQL yoksa InMemory kullan (geliï¿½tirme iï¿½in)
         if (builder.Environment.IsDevelopment())
         {
-            logger.LogWarning("Yedek olarak InMemory veritabaný kullanýlýyor");
+            logger.LogWarning("Yedek olarak InMemory veritabanï¿½ kullanï¿½lï¿½yor");
         }
     }
 }
@@ -161,7 +164,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// CORS Middleware'ini etkinleþtirin
+// CORS Middleware'ini etkinleï¿½tirin
 app.UseCors(MyAllowSpecificOrigins);
 
 app.MapControllers();

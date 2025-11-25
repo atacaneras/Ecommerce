@@ -89,5 +89,24 @@ namespace OrderService.Controllers
                 return StatusCode(500, new { message = "Sipariş durumu güncellenirken bir hata oluştu" });
             }
         }
+
+        [HttpPost("cancel/{id}")]
+        public async Task<ActionResult<OrderResponse>> CancelOrder(Guid id)
+        {
+            try
+            {
+                var order = await _orderService.UpdateOrderStatusAsync(id, OrderStatus.Cancelled);
+
+                if (order == null)
+                    return NotFound(new { message = $"Sipariş {id} bulunamadı" });
+
+                return Ok(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş {OrderId} iptal edilirken hata", id);
+                return StatusCode(500, new { message = "Sipariş iptal edilirken bir hata oluştu" });
+            }
+        }
     }
 }

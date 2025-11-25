@@ -2,6 +2,6 @@
 {
     public interface IEmailService
     {
-        Task<bool> SendEmailAsync(string to, string subject, string body, string? orderId = null);
+        Task<bool> SendEmailAsync(string to, string subject, string body, string? orderId = null, string? customerName = null);
     }
 }

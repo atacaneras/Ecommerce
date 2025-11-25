@@ -61,17 +61,17 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogInformation("Veritabaný migrasyonlarý çalýþtýrýlýyor...");
+        logger.LogInformation("Veritabanï¿½ migrasyonlarï¿½ ï¿½alï¿½ï¿½tï¿½rï¿½lï¿½yor...");
 
         var dbContext = scope.ServiceProvider.GetRequiredService<VerificationDbContext>();
         dbContext.Database.Migrate();
 
-        logger.LogInformation("Veritabaný migrasyonlarý baþarýyla tamamlandý");
+        logger.LogInformation("Veritabanï¿½ migrasyonlarï¿½ baï¿½arï¿½yla tamamlandï¿½");
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Veritabaný migrasyonu baþarýsýz oldu: {Message}", ex.Message);
+        logger.LogError(ex, "Veritabanï¿½ migrasyonu baï¿½arï¿½sï¿½z oldu: {Message}", ex.Message);
     }
 }
 

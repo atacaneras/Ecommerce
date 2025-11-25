@@ -12,6 +12,7 @@ namespace StockService.Services
         Task<bool> FinalizeStockAsync(UpdateStockRequest request);
 
         Task<bool> CheckStockAvailabilityAsync(int productId, int quantity);
+        Task<bool> CancelOrderAsync(Guid orderId);
 
         Task<ProductResponse?> GetProductByIdAsync(int productId);
         Task<IEnumerable<ProductResponse>> GetAllProductsAsync();

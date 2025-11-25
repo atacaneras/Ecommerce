@@ -91,6 +91,7 @@ namespace OrderService.Services
                 var notificationMessage = new NotificationMessage
                 {
                     OrderId = order.Id,
+                    CustomerName = order.CustomerName,
                     CustomerEmail = order.CustomerEmail,
                     CustomerPhone = order.CustomerPhone,
                     Message = $"Siparişiniz #{order.Id} alındı ve onay bekliyor. Toplam: {order.TotalAmount:F2}₺",
@@ -207,6 +208,7 @@ namespace OrderService.Services
                     var notificationMessage = new NotificationMessage
                     {
                         OrderId = order.Id,
+                        CustomerName = order.CustomerName,
                         CustomerEmail = order.CustomerEmail,
                         CustomerPhone = order.CustomerPhone,
                         // İstenen mesaj: "siparişiniz iptal edildi"

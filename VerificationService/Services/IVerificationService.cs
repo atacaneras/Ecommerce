@@ -13,5 +13,6 @@ namespace VerificationService.Services
         Task CreateVerificationRequestAsync(OrderApprovedMessage message);
         Task<VerificationResponse> CreateVerificationAsync(Guid orderId, string customerName, decimal totalAmount);
         Task<bool> ApproveVerificationAsync(Guid orderId);
+        Task<bool> CancelOrderAsync(Guid orderId);
     }
 }

@@ -179,6 +179,32 @@ namespace VerificationService.Services
             return MapToResponse(item);
         }
 
+        public async Task<bool> CancelOrderAsync(Guid orderId)
+        {
+            try
+            {
+                var item = (await _repository.FindAsync(v => v.OrderId == orderId)).FirstOrDefault();
+                if (item == null)
+                {
+                    _logger.LogWarning("Doğrulama kaydı bulunamadı: {OrderId}", orderId);
+                    return false;
+                }
+
+                item.Status = VerificationStatus.Rejected;
+                item.RejectReason = "Sipariş iptal edildi";
+                item.VerifiedAt = DateTime.UtcNow;
+
+                await _repository.UpdateAsync(item);
+                _logger.LogInformation("Sipariş {OrderId} için doğrulama iptal edildi", orderId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş {OrderId} iptal edilirken hata oluştu", orderId);
+                return false;
+            }
+        }
+
         public async Task<IEnumerable<VerificationResponse>> GetAllVerificationsAsync()
         {
             var list = await _repository.GetAllAsync();

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using NotificationService.DTOs;
 using NotificationService.Services;
 
@@ -82,5 +83,37 @@ namespace NotificationService.Controllers
                 return StatusCode(500, new { message = "Bir hata oluştu" });
             }
         }
+
+        [HttpPost("test-email")]
+        public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request)
+        {
+            try
+            {
+                var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
+                var result = await emailService.SendEmailAsync(
+                    request.To ?? "atacaneras@gmail.com",
+                    request.Subject ?? "Test Email",
+                    request.Body ?? "This is a test email from Notification Service",
+                    null,
+                    null);
+                
+                if (result)
+                    return Ok(new { message = "Test email başarıyla gönderildi" });
+                
+                return BadRequest(new { message = "Test email gönderilemedi. Lütfen logları kontrol edin." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Test email gönderilirken hata oluştu");
+                return StatusCode(500, new { message = $"Hata: {ex.Message}" });
+            }
+        }
+    }
+
+    public class TestEmailRequest
+    {
+        public string? To { get; set; }
+        public string? Subject { get; set; }
+        public string? Body { get; set; }
     }
 }

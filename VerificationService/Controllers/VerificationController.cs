@@ -44,5 +44,24 @@ namespace VerificationService.Controllers
                 return StatusCode(500, new { message = "Hata oluştu." });
             }
         }
+
+        [HttpPost("cancel/{orderId}")]
+        public async Task<IActionResult> CancelOrder(Guid orderId)
+        {
+            try
+            {
+                var success = await _service.CancelOrderAsync(orderId);
+
+                if (!success)
+                    return NotFound(new { message = "Doğrulama kaydı bulunamadı veya işlem başarısız." });
+
+                return Ok(new { message = "Sipariş başarıyla iptal edildi." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş iptal edilirken hata oluştu: {OrderId}", orderId);
+                return StatusCode(500, new { message = "Hata oluştu." });
+            }
+        }
     }
 }

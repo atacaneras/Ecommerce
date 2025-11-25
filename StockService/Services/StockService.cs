@@ -18,7 +18,7 @@ namespace StockService.Services
            IRepository<Product> productRepository,
            StockDbContext context,
            ILogger<StockServiceImpl> logger,
-           IHttpClientFactory httpClientFactory, 
+           IHttpClientFactory httpClientFactory,
            IConfiguration configuration)
         {
             _productRepository = productRepository;
@@ -315,6 +315,69 @@ namespace StockService.Services
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "{OrderId} siparişi için stok konfirmasyonu işlenirken hata", orderId);
+                throw;
+            }
+        }
+
+        public async Task<bool> CancelOrderAsync(Guid orderId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                _logger.LogInformation("{OrderId} siparişi için stok iptali işleniyor", orderId);
+
+                // İlgili stok işlemlerini bul
+                var stockTransactions = await _context.StockTransactions
+                    .Where(st => st.OrderId == orderId)
+                    .Include(st => st.Product)
+                    .ToListAsync();
+
+                if (!stockTransactions.Any())
+                {
+                    _logger.LogWarning("Sipariş {OrderId} için stok işlemi bulunamadı", orderId);
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
+                foreach (var stockTransaction in stockTransactions)
+                {
+                    var product = stockTransaction.Product;
+
+                    // İptal: Sadece ReservedQuantity'den düş, StockQuantity'ye dokunma (rezervasyonu iade et)
+                    if (product.ReservedQuantity >= stockTransaction.Quantity)
+                    {
+                        product.ReservedQuantity -= stockTransaction.Quantity;
+                        product.UpdatedAt = DateTime.UtcNow;
+
+                        // İşlem notunu güncelle
+                        stockTransaction.Notes = $"{orderId} siparişi iptal edildi ve rezervasyon iade edildi";
+                        _context.StockTransactions.Update(stockTransaction);
+
+                        await _productRepository.UpdateAsync(product);
+
+                        _logger.LogInformation(
+                            "Ürün {ProductId} için rezervasyon iptal edildi. Rezerve: {Reserved}, Toplam: {Total}",
+                            product.Id, product.ReservedQuantity, product.StockQuantity);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Ürün {ProductId} için rezerve stok yetersiz. İstenen: {Requested}, Mevcut Rezerve: {Reserved}",
+                            product.Id, stockTransaction.Quantity, product.ReservedQuantity);
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+                }
+
+                await transaction.CommitAsync();
+                _logger.LogInformation("{OrderId} siparişi için stok iptali başarıyla tamamlandı", orderId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "{OrderId} siparişi için stok iptali işlenirken hata", orderId);
                 throw;
             }
         }

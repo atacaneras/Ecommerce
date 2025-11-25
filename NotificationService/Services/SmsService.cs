@@ -30,7 +30,6 @@ namespace NotificationService.Services
                 var password = _configuration["Sms:NetGSM:Password"];
                 var header = _configuration["Sms:NetGSM:Header"]; // Başlık (örn: "BEYMEN")
 
-                // Eğer yapılandırılmamışsa simüle et
                 if (string.IsNullOrEmpty(username))
                 {
                     _logger.LogInformation(
