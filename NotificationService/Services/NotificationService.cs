@@ -69,11 +69,21 @@ namespace NotificationService.Services
                     notificationsToSend.Add(smsNotification);
                 }
 
-                // Bildirimleri kaydet ve gönder
+                // Bildirimleri kaydet ve gönder (sadece ShouldSendImmediately true ise)
                 foreach (var notification in notificationsToSend)
                 {
                     await _notificationRepository.AddAsync(notification);
-                    await SendNotificationWithRetryAsync(notification);
+                    
+                    if (request.ShouldSendImmediately)
+                    {
+                        await SendNotificationWithRetryAsync(notification, request.CustomerName);
+                    }
+                    else
+                    {
+                        _logger.LogInformation(
+                            "Bildirim {NotificationId} Pending olarak kaydedildi, gönderilmedi. Sipariş #{OrderId}",
+                            notification.Id, notification.OrderId);
+                    }
                 }
 
                 _logger.LogInformation("Sipariş {OrderId} için bildirimler başarıyla işlendi", request.OrderId);
@@ -86,7 +96,40 @@ namespace NotificationService.Services
             }
         }
 
-        private async Task SendNotificationWithRetryAsync(Notification notification)
+        public async Task<bool> SendPendingNotificationsAsync(Guid orderId)
+        {
+            try
+            {
+                var pendingNotifications = await _context.Notifications
+                    .Where(n => n.OrderId == orderId && n.Status == NotificationStatus.Pending)
+                    .ToListAsync();
+
+                if (pendingNotifications.Any())
+                {
+                    _logger.LogInformation("Sipariş {OrderId} için {Count} adet pending bildirim bulundu, gönderiliyor...", 
+                        orderId, pendingNotifications.Count);
+
+                    foreach (var notification in pendingNotifications)
+                    {
+                        // For pending notifications, we don't have customer name, so pass null
+                        // The email will still work without the name
+                        await SendNotificationWithRetryAsync(notification, null);
+                    }
+
+                    _logger.LogInformation("Sipariş {OrderId} için tüm pending bildirimler gönderildi", orderId);
+                    return true;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş {OrderId} için pending bildirimler gönderilirken hata oluştu", orderId);
+                return false;
+            }
+        }
+
+        private async Task SendNotificationWithRetryAsync(Notification notification, string? customerName = null)
         {
             var retryPolicy = Policy
                 .Handle<Exception>()
@@ -112,10 +155,14 @@ namespace NotificationService.Services
                     // Gerçek email/sms gönderimi
                     if (notification.Type == NotificationType.Email)
                     {
+                        // Determine subject based on message content
+                        var emailSubject = GetEmailSubject(notification.Message);
                         success = await _emailService.SendEmailAsync(
                             notification.Recipient,
-                            $"Sipariş #{notification.OrderId} Güncelleme",
-                            notification.Message);
+                            emailSubject,
+                            notification.Message,
+                            notification.OrderId.ToString(),
+                            customerName);
                     }
                     else if (notification.Type == NotificationType.SMS)
                     {
@@ -192,6 +239,27 @@ namespace NotificationService.Services
             {
                 _logger.LogError(ex, "Tüm bildirimleri alırken hata oluştu");
                 throw;
+            }
+        }
+
+        private string GetEmailSubject(string message)
+        {
+            var lowerMessage = message.ToLower();
+            if (lowerMessage.Contains("iptal") || lowerMessage.Contains("iptal edildi"))
+            {
+                return "Siparişiniz İptal Edildi";
+            }
+            else if (lowerMessage.Contains("onaylandı") || lowerMessage.Contains("onaylandi"))
+            {
+                return "Siparişiniz Onaylandı";
+            }
+            else if (lowerMessage.Contains("alındı") || lowerMessage.Contains("alindi") || lowerMessage.Contains("bekliyor"))
+            {
+                return "Siparişiniz Alındı";
+            }
+            else
+            {
+                return "Sipariş Bildirimi";
             }
         }
 
