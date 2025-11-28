@@ -8,7 +8,7 @@
         public string CustomerPhone { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public NotificationType Type { get; set; }
-        public bool ShouldSendImmediately { get; set; } = true; // Default to true for backward compatibility
+        public bool ShouldSendImmediately { get; set; } = true;
     }
 
     public enum NotificationType
