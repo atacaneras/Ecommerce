@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Package, Bell, ClipboardCheck, FileText } from 'lucide-react';
-
-// Import sub-components
 import OrdersTab from './tabs/OrdersTab';
 import ProductsTab from './tabs/ProductsTab';
 import VerificationsTab from './tabs/VerificationsTab';
@@ -378,7 +376,7 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'invoices' && (
-          <InvoicesTab invoices={invoices} />
+          <InvoicesTab invoices={invoices} products={products} />
         )}
 
         {activeTab === 'products' && (

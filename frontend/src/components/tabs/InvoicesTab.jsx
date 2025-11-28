@@ -1,7 +1,7 @@
 import React from 'react';
 import { FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-export default function InvoicesTab({ invoices }) {
+export default function InvoicesTab({ invoices, products }) {
   const getStatusColor = (status) => {
     const colors = {
       'Draft': 'bg-gray-500/20 text-gray-300 border-gray-500/30',
@@ -59,15 +59,21 @@ export default function InvoicesTab({ invoices }) {
               <div className="bg-slate-800 rounded-lg p-3 mt-3 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Ara Toplam:</span>
-                  <span className="text-white font-semibold">{invoice.subTotal.toFixed(2)} ₺</span>
+                  <span className="text-white font-semibold">
+                    {(invoice.subTotal || 0).toFixed(2)} ₺
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">KDV (%{invoice.taxRate}):</span>
-                  <span className="text-white font-semibold">{invoice.taxAmount.toFixed(2)} ₺</span>
+                  <span className="text-slate-400">KDV (%{invoice.taxRate || 0}):</span>
+                  <span className="text-white font-semibold">
+                    {(invoice.taxAmount || 0).toFixed(2)} ₺
+                  </span>
                 </div>
                 <div className="flex justify-between text-base border-t border-slate-600 pt-2 mt-2">
                   <span className="text-white font-bold">TOPLAM:</span>
-                  <span className="text-green-400 font-bold text-xl">{invoice.totalAmount.toFixed(2)} ₺</span>
+                  <span className="text-green-400 font-bold text-xl">
+                    {(invoice.totalAmount || 0).toFixed(2)} ₺
+                  </span>
                 </div>
               </div>
 
@@ -75,12 +81,21 @@ export default function InvoicesTab({ invoices }) {
               {invoice.items && invoice.items.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-600">
                   <p className="text-xs text-slate-400 mb-2">Ürünler:</p>
-                  {invoice.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-xs text-slate-300 py-1">
-                      <span>{item.productName}</span>
-                      <span>{item.quantity} x {item.unitPrice.toFixed(2)} ₺</span>
-                    </div>
-                  ))}
+                  {invoice.items.map((item, index) => {
+                    const product = products && products.find(p => p.id === item.productId);
+                    
+                    return (
+                      <div key={index} className="flex justify-between text-xs text-slate-300 py-1">
+                        <span>
+                            {item.productName}
+                            {product?.description && (
+                                <span className="text-slate-500 ml-2">({product.description})</span>
+                            )}
+                        </span>
+                        <span>{item.quantity} x {item.unitPrice.toFixed(2)} ₺</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

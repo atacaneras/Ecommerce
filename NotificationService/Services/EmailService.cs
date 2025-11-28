@@ -37,7 +37,7 @@ namespace NotificationService.Services
                     body = " ";
                 }
 
-                body = EmailTemplateService.GetEmailTemplate(body, orderId ?? "", subject, customerName);
+                body = EmailTemplateService.GetEmailTemplate(body, orderId ?? "", subject, customerName, invoice);
 
                 var smtpHost = _configuration["Email:SmtpHost"];
                 var smtpPortStr = _configuration["Email:SmtpPort"] ?? "587";
