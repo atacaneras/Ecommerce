@@ -14,7 +14,7 @@ namespace NotificationService.Services
             _configuration = configuration;
         }
 
-        public async Task<bool> SendEmailAsync(string to, string subject, string body, string? orderId = null, string? customerName = null)
+        public async Task<bool> SendEmailAsync(string to, string subject, string body, string? orderId = null, string? customerName = null, InvoiceData? invoice = null)
         {
             try
             {
