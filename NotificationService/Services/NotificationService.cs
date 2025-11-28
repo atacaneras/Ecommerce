@@ -112,9 +112,9 @@ namespace NotificationService.Services
         private async Task<InvoiceData?> FetchInvoiceDataAsync(Guid orderId)
         {
             var invoiceServiceUrl = _configuration["Services:InvoiceService"] ?? "http://invoice-service";
+            var stockServiceUrl = _configuration["Services:StockService"] ?? "http://stock-service";
             var httpClient = _httpClientFactory.CreateClient();
 
-            // 5 kez dene (her deneme arası 1 saniye bekle)
             int maxRetries = 5;
             int delay = 1000;
 
@@ -134,7 +134,38 @@ namespace NotificationService.Services
 
                         if (invoiceResponse != null)
                         {
-                            _logger.LogInformation("Fatura bulundu (Deneme {RetryCount})", i + 1);
+                            var invoiceItems = new List<InvoiceItemData>();
+
+                            // Her bir ürün için StockService'e gidip açıklama bilgisini alalım
+                            foreach (var item in invoiceResponse.Items)
+                            {
+                                string description = "";
+                                try
+                                {
+                                    var productResponse = await httpClient.GetAsync($"{stockServiceUrl}/api/stock/products/{item.ProductId}");
+                                    if (productResponse.IsSuccessStatusCode)
+                                    {
+                                        var productJson = await productResponse.Content.ReadAsStringAsync();
+                                        var product = JsonSerializer.Deserialize<ProductDto>(productJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                        description = product?.Description ?? "";
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Ürün açıklaması çekilemedi: {ProductId}", item.ProductId);
+                                }
+
+                                invoiceItems.Add(new InvoiceItemData
+                                {
+                                    ProductName = item.ProductName,
+                                    Description = description,
+                                    Quantity = item.Quantity,
+                                    UnitPrice = item.UnitPrice,
+                                    TotalPrice = item.Quantity * item.UnitPrice
+                                });
+                            }
+
+                            _logger.LogInformation("Fatura bulundu ve ürün detayları çekildi (Deneme {RetryCount})", i + 1);
                             return new InvoiceData
                             {
                                 InvoiceNumber = invoiceResponse.InvoiceNumber,
@@ -144,38 +175,23 @@ namespace NotificationService.Services
                                 TotalAmount = invoiceResponse.TotalAmount,
                                 CreatedAt = invoiceResponse.CreatedAt,
                                 DueDate = invoiceResponse.DueDate,
-                                Items = invoiceResponse.Items.Select(item => new InvoiceItemData
-                                {
-                                    ProductName = item.ProductName,
-                                    Quantity = item.Quantity,
-                                    UnitPrice = item.UnitPrice,
-                                    TotalPrice = item.Quantity * item.UnitPrice
-                                }).ToList()
+                                Items = invoiceItems
                             };
                         }
                     }
                     else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
-                        _logger.LogWarning("Sipariş {OrderId} için fatura henüz oluşmadı, bekleniyor... ({Current}/{Max})",
-                            orderId, i + 1, maxRetries);
-
-                        // Faturanın oluşması için biraz bekle
+                        _logger.LogWarning("Sipariş {OrderId} için fatura henüz oluşmadı, bekleniyor...", orderId);
                         await Task.Delay(delay);
                         continue;
-                    }
-                    else
-                    {
-                        _logger.LogError("Fatura servisi hata döndü: {StatusCode}", response.StatusCode);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Fatura bilgisi alınırken hata oluştu: {OrderId}. Tekrar deneniyor...", orderId);
+                    _logger.LogError(ex, "Fatura bilgisi alınırken hata oluştu");
                     await Task.Delay(delay);
                 }
             }
-
-            _logger.LogError("Sipariş {OrderId} için fatura {MaxRetries} deneme sonucunda bulunamadı.", orderId, maxRetries);
             return null;
         }
 
@@ -375,8 +391,14 @@ namespace NotificationService.Services
 
     public class InvoiceItemResponse
     {
+        public int ProductId { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+    }
+
+    public class ProductDto
+    {
+        public string Description { get; set; } = string.Empty;
     }
 }

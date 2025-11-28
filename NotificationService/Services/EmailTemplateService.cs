@@ -85,7 +85,9 @@ namespace NotificationService.Services
                 itemsHtml.Append($@"
                     <tr>
                         <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #333;"">{item.ProductName}</td>
-                        <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #333;"">{item.Description}</td>
+                        <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #666; font-size: 12px;"">
+                            {item.Description}
+                        </td>
                         <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #333; text-align: center;"">{item.Quantity}</td>
                         <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #333; text-align: right;"">{item.UnitPrice:F2} ₺</td>
                         <td style=""padding: 12px; border-bottom: 1px solid #e9ecef; color: #333; text-align: right; font-weight: 600;"">{item.TotalPrice:F2} ₺</td>
@@ -115,6 +117,7 @@ namespace NotificationService.Services
                             <thead>
                                 <tr style=""background-color: #f8f9fa;"">
                                     <th style=""padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; text-align: left; font-weight: 600;"">Ürün</th>
+                                    <th style=""padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; text-align: left; font-weight: 600;"">Açıklama</th>
                                     <th style=""padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; text-align: center; font-weight: 600;"">Adet</th>
                                     <th style=""padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; text-align: right; font-weight: 600;"">Birim Fiyat</th>
                                     <th style=""padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; text-align: right; font-weight: 600;"">Toplam</th>
@@ -200,7 +203,7 @@ namespace NotificationService.Services
     public class InvoiceItemData
     {
         public string ProductName { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty; 
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalPrice { get; set; }
