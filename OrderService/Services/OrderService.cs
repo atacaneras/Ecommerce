@@ -4,6 +4,8 @@ using OrderService.Models;
 using Shared.Infrastructure.Messaging;
 using Shared.Infrastructure.Messaging.Messages;
 using Shared.Infrastructure.Repository;
+using Microsoft.EntityFrameworkCore;
+using OrderService.Data;
 
 namespace OrderService.Services
 {
@@ -14,15 +16,18 @@ namespace OrderService.Services
         private readonly ILogger<OrderServiceImpl> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+        private readonly OrderDbContext _context;
 
         public OrderServiceImpl(
             IRepository<Order> orderRepository,
+            OrderDbContext context,
             IMessagePublisher messagePublisher,
             ILogger<OrderServiceImpl> logger,
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration)
         {
             _orderRepository = orderRepository;
+            _context = context;
             _messagePublisher = messagePublisher;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
@@ -42,7 +47,7 @@ namespace OrderService.Services
                     CustomerName = request.CustomerName,
                     CustomerEmail = request.CustomerEmail,
                     CustomerPhone = request.CustomerPhone,
-                    Status = OrderStatus.Pending, // Başlangıç durumu Pending
+                    Status = OrderStatus.Pending,
                     CreatedAt = DateTime.UtcNow,
                     Items = request.Items.Select(i => new OrderItem
                     {
@@ -53,10 +58,7 @@ namespace OrderService.Services
                         TotalPrice = i.Quantity * i.UnitPrice
                     }).ToList()
                 };
-
                 order.TotalAmount = order.Items.Sum(i => i.TotalPrice);
-
-                // 2. Veritabanına kaydet
                 await _orderRepository.AddAsync(order);
                 _logger.LogInformation("Sipariş {OrderId} veritabanına başarıyla kaydedildi", order.Id);
 
@@ -115,7 +117,10 @@ namespace OrderService.Services
         {
             try
             {
-                var order = await _orderRepository.GetByIdAsync(orderId);
+                var order = await _context.Orders
+                    .Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
                 return order != null ? MapToResponse(order) : null;
             }
             catch (Exception ex)
@@ -129,7 +134,11 @@ namespace OrderService.Services
         {
             try
             {
-                var orders = await _orderRepository.GetAllAsync();
+                var orders = await _context.Orders
+                    .Include(o => o.Items)
+                    .OrderByDescending(o => o.CreatedAt)
+                    .ToListAsync();
+
                 return orders.Select(MapToResponse);
             }
             catch (Exception ex)
@@ -141,114 +150,108 @@ namespace OrderService.Services
 
         public async Task<OrderResponse?> UpdateOrderStatusAsync(Guid orderId, OrderStatus newStatus)
         {
-            try
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null) return null;
+
+            order.Status = newStatus;
+            order.UpdatedAt = DateTime.UtcNow;
+            await _orderRepository.UpdateAsync(order);
+
+            // YENİ: İptal durumu için stok iptali ve bildirim gönder
+            if (newStatus == OrderStatus.Cancelled)
             {
-                var order = await _orderRepository.GetByIdAsync(orderId);
-                // ... (Hata kontrolü ve loglama)
+                // Stok rezervasyonunu iptal et
+                var stockServiceUrl = _configuration["Services:StockService"] ?? "http://stock-service";
+                var httpClient = _httpClientFactory.CreateClient();
 
-                order.Status = newStatus;
-                order.UpdatedAt = DateTime.UtcNow;
-
-                await _orderRepository.UpdateAsync(order);
-
-                // YENİ: İptal durumu için stok iptali ve bildirim gönder
-                if (newStatus == OrderStatus.Cancelled)
+                try
                 {
-                    // Stok rezervasyonunu iptal et
-                    var stockServiceUrl = _configuration["Services:StockService"] ?? "http://stock-service";
-                    var httpClient = _httpClientFactory.CreateClient();
+                    var stockCancelResponse = await httpClient.PostAsync(
+                        $"{stockServiceUrl}/api/stock/cancel/{order.Id}",
+                        null);
 
-                    try
+                    if (stockCancelResponse.IsSuccessStatusCode)
                     {
-                        var stockCancelResponse = await httpClient.PostAsync(
-                            $"{stockServiceUrl}/api/stock/cancel/{order.Id}",
-                            null);
-
-                        if (stockCancelResponse.IsSuccessStatusCode)
-                        {
-                            _logger.LogInformation("Sipariş {OrderId} için stok rezervasyonu iptal edildi.", order.Id);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Sipariş {OrderId} için stok iptali başarısız oldu: {Error}",
-                                order.Id, await stockCancelResponse.Content.ReadAsStringAsync());
-                        }
+                        _logger.LogInformation("Sipariş {OrderId} için stok rezervasyonu iptal edildi.", order.Id);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogError(ex, "Sipariş {OrderId} için stok iptali sırasında hata oluştu", order.Id);
+                        _logger.LogWarning("Sipariş {OrderId} için stok iptali başarısız oldu: {Error}",
+                            order.Id, await stockCancelResponse.Content.ReadAsStringAsync());
                     }
-
-                    // Verification durumunu güncelle (Rejected olarak işaretle) - ÖNCE BUNU YAP
-                    var verificationServiceUrl = _configuration["Services:VerificationService"] ?? "http://verification-service";
-                    try
-                    {
-                        var verificationCancelResponse = await httpClient.PostAsync(
-                            $"{verificationServiceUrl}/api/verification/cancel/{order.Id}",
-                            null);
-                        
-                        if (verificationCancelResponse.IsSuccessStatusCode)
-                        {
-                            _logger.LogInformation("Sipariş {OrderId} için doğrulama kaydı iptal edildi.", order.Id);
-                        }
-                        else
-                        {
-                            var errorContent = await verificationCancelResponse.Content.ReadAsStringAsync();
-                            _logger.LogWarning("Sipariş {OrderId} için doğrulama iptali başarısız oldu: {Error}", 
-                                order.Id, errorContent);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Sipariş {OrderId} için doğrulama iptali sırasında hata oluştu: {Message}", 
-                            order.Id, ex.Message);
-                    }
-
-                    // İptal bildirimi gönder
-                    var notificationMessage = new NotificationMessage
-                    {
-                        OrderId = order.Id,
-                        CustomerName = order.CustomerName,
-                        CustomerEmail = order.CustomerEmail,
-                        CustomerPhone = order.CustomerPhone,
-                        // İstenen mesaj: "siparişiniz iptal edildi"
-                        Message = "Siparişiniz iptal edildi.",
-                        Type = NotificationType.Both,
-                        ShouldSendImmediately = true // İptal bildirimi hemen gönderilmeli
-                    };
-
-                    await _messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
-                    _logger.LogInformation("Sipariş {OrderId} için iptal bildirimi yayınlandı.", order.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Sipariş {OrderId} için stok iptali sırasında hata oluştu", order.Id);
                 }
 
-                return MapToResponse(order);
+                // Verification durumunu güncelle (Rejected olarak işaretle) - ÖNCE BUNU YAP
+                var verificationServiceUrl = _configuration["Services:VerificationService"] ?? "http://verification-service";
+                try
+                {
+                    var verificationCancelResponse = await httpClient.PostAsync(
+                        $"{verificationServiceUrl}/api/verification/cancel/{order.Id}",
+                        null);
+
+                    if (verificationCancelResponse.IsSuccessStatusCode)
+                    {
+                        _logger.LogInformation("Sipariş {OrderId} için doğrulama kaydı iptal edildi.", order.Id);
+                    }
+                    else
+                    {
+                        var errorContent = await verificationCancelResponse.Content.ReadAsStringAsync();
+                        _logger.LogWarning("Sipariş {OrderId} için doğrulama iptali başarısız oldu: {Error}",
+                            order.Id, errorContent);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Sipariş {OrderId} için doğrulama iptali sırasında hata oluştu: {Message}",
+                        order.Id, ex.Message);
+                }
+
+                // İptal bildirimi gönder
+                var notificationMessage = new NotificationMessage
+                {
+                    OrderId = order.Id,
+                    CustomerName = order.CustomerName,
+                    CustomerEmail = order.CustomerEmail,
+                    CustomerPhone = order.CustomerPhone,
+                    // İstenen mesaj: "siparişiniz iptal edildi"
+                    Message = "Siparişiniz iptal edildi.",
+                    Type = NotificationType.Both,
+                    ShouldSendImmediately = true // İptal bildirimi hemen gönderilmeli
+                };
+
+                await _messagePublisher.PublishAsync("notification-exchange", "notification.send", notificationMessage);
+                _logger.LogInformation("Sipariş {OrderId} için iptal bildirimi yayınlandı.", order.Id);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Sipariş durumu güncellenirken hata oluştu: {OrderId}", orderId);
-                throw;
-            }
+
+            return MapToResponse(order);
         }
 
-
-        private OrderResponse MapToResponse(Order order)
+private OrderResponse MapToResponse(Order order)
         {
             return new OrderResponse
-            {
-                Id = order.Id,
-                CustomerName = order.CustomerName,
-                CustomerEmail = order.CustomerEmail,
-                TotalAmount = order.TotalAmount,
-                Status = order.Status.ToString(),
-                CreatedAt = order.CreatedAt,
-                Items = order.Items.Select(i => new OrderItemDto
-                {
-                    ProductId = i.ProductId,
-                    ProductName = i.ProductName,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice
-                }).ToList()
-            };
+                   {
+                       Id = order.Id,
+                       CustomerName = order.CustomerName,
+                       CustomerEmail = order.CustomerEmail,
+
+                       CustomerPhone = order.CustomerPhone,
+
+                       TotalAmount = order.TotalAmount,
+                       Status = order.Status.ToString(),
+                       CreatedAt = order.CreatedAt,
+
+                       Items = order.Items?.Select(i => new OrderItemDto
+                       {
+                           ProductId = i.ProductId,
+                           ProductName = i.ProductName,
+                           Quantity = i.Quantity,
+                           UnitPrice = i.UnitPrice
+                       }).ToList() ?? new List<OrderItemDto>()
+                   };
         }
     }
 }
