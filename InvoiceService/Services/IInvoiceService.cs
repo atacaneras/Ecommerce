@@ -7,7 +7,9 @@ namespace InvoiceService.Services
         Task<InvoiceResponse> CreateInvoiceAsync(CreateInvoiceRequest request);
         Task<InvoiceResponse?> GetInvoiceByIdAsync(int id);
         Task<InvoiceResponse?> GetInvoiceByOrderIdAsync(Guid orderId);
-        Task<IEnumerable<InvoiceListResponse>> GetAllInvoicesAsync();
+
+        Task<IEnumerable<InvoiceResponse>> GetAllInvoicesAsync();
+
         Task<bool> MarkAsPaidAsync(int invoiceId);
         Task<bool> CancelInvoiceAsync(int invoiceId);
     }

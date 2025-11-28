@@ -120,15 +120,17 @@ namespace InvoiceService.Services
             }
         }
 
-        public async Task<IEnumerable<InvoiceListResponse>> GetAllInvoicesAsync()
+        public async Task<IEnumerable<InvoiceResponse>> GetAllInvoicesAsync()
         {
             try
             {
                 var invoices = await _context.Invoices
+                    .Include(i => i.Items) // EKLENDİ: Ürün detaylarını çekmek için gerekli
                     .OrderByDescending(i => i.CreatedAt)
                     .ToListAsync();
 
-                return invoices.Select(MapToListResponse);
+                // DEĞİŞTİRİLDİ: MapToListResponse yerine MapToResponse kullanılıyor
+                return invoices.Select(MapToResponse);
             }
             catch (Exception ex)
             {
@@ -136,7 +138,6 @@ namespace InvoiceService.Services
                 throw;
             }
         }
-
         public async Task<bool> MarkAsPaidAsync(int invoiceId)
         {
             try

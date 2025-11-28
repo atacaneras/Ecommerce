@@ -69,7 +69,7 @@ namespace InvoiceService.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<InvoiceListResponse>>> GetAllInvoices()
+        public async Task<ActionResult<IEnumerable<InvoiceResponse>>> GetAllInvoices()
         {
             try
             {
