@@ -111,52 +111,71 @@ namespace NotificationService.Services
 
         private async Task<InvoiceData?> FetchInvoiceDataAsync(Guid orderId)
         {
-            try
+            var invoiceServiceUrl = _configuration["Services:InvoiceService"] ?? "http://invoice-service";
+            var httpClient = _httpClientFactory.CreateClient();
+
+            // 5 kez dene (her deneme arası 1 saniye bekle)
+            int maxRetries = 5;
+            int delay = 1000;
+
+            for (int i = 0; i < maxRetries; i++)
             {
-                var invoiceServiceUrl = _configuration["Services:InvoiceService"] ?? "http://invoice-service";
-                var httpClient = _httpClientFactory.CreateClient();
-
-                var response = await httpClient.GetAsync($"{invoiceServiceUrl}/api/invoices/order/{orderId}");
-
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    var jsonString = await response.Content.ReadAsStringAsync();
-                    var invoiceResponse = JsonSerializer.Deserialize<InvoiceResponse>(jsonString, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                    var response = await httpClient.GetAsync($"{invoiceServiceUrl}/api/invoices/order/{orderId}");
 
-                    if (invoiceResponse != null)
+                    if (response.IsSuccessStatusCode)
                     {
-                        return new InvoiceData
+                        var jsonString = await response.Content.ReadAsStringAsync();
+                        var invoiceResponse = JsonSerializer.Deserialize<InvoiceResponse>(jsonString, new JsonSerializerOptions
                         {
-                            InvoiceNumber = invoiceResponse.InvoiceNumber,
-                            SubTotal = invoiceResponse.SubTotal,
-                            TaxRate = invoiceResponse.TaxRate,
-                            TaxAmount = invoiceResponse.TaxAmount,
-                            TotalAmount = invoiceResponse.TotalAmount,
-                            CreatedAt = invoiceResponse.CreatedAt,
-                            DueDate = invoiceResponse.DueDate,
-                            Items = invoiceResponse.Items.Select(i => new InvoiceItemData
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                        if (invoiceResponse != null)
+                        {
+                            _logger.LogInformation("Fatura bulundu (Deneme {RetryCount})", i + 1);
+                            return new InvoiceData
                             {
-                                ProductName = i.ProductName,
-                                Quantity = i.Quantity,
-                                UnitPrice = i.UnitPrice,
-                                TotalPrice = i.Quantity * i.UnitPrice
-                            }).ToList()
-                        };
+                                InvoiceNumber = invoiceResponse.InvoiceNumber,
+                                SubTotal = invoiceResponse.SubTotal,
+                                TaxRate = invoiceResponse.TaxRate,
+                                TaxAmount = invoiceResponse.TaxAmount,
+                                TotalAmount = invoiceResponse.TotalAmount,
+                                CreatedAt = invoiceResponse.CreatedAt,
+                                DueDate = invoiceResponse.DueDate,
+                                Items = invoiceResponse.Items.Select(item => new InvoiceItemData
+                                {
+                                    ProductName = item.ProductName,
+                                    Quantity = item.Quantity,
+                                    UnitPrice = item.UnitPrice,
+                                    TotalPrice = item.Quantity * item.UnitPrice
+                                }).ToList()
+                            };
+                        }
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        _logger.LogWarning("Sipariş {OrderId} için fatura henüz oluşmadı, bekleniyor... ({Current}/{Max})",
+                            orderId, i + 1, maxRetries);
+
+                        // Faturanın oluşması için biraz bekle
+                        await Task.Delay(delay);
+                        continue;
+                    }
+                    else
+                    {
+                        _logger.LogError("Fatura servisi hata döndü: {StatusCode}", response.StatusCode);
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    _logger.LogWarning("Sipariş {OrderId} için fatura bulunamadı", orderId);
+                    _logger.LogError(ex, "Fatura bilgisi alınırken hata oluştu: {OrderId}. Tekrar deneniyor...", orderId);
+                    await Task.Delay(delay);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fatura bilgisi alınırken hata oluştu: {OrderId}", orderId);
-            }
 
+            _logger.LogError("Sipariş {OrderId} için fatura {MaxRetries} deneme sonucunda bulunamadı.", orderId, maxRetries);
             return null;
         }
 
