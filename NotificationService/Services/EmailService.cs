@@ -37,7 +37,6 @@ namespace NotificationService.Services
                     body = " ";
                 }
 
-                // Format body with HTML template
                 body = EmailTemplateService.GetEmailTemplate(body, orderId ?? "", subject, customerName);
 
                 var smtpHost = _configuration["Email:SmtpHost"];
@@ -69,8 +68,6 @@ namespace NotificationService.Services
                     return false;
                 }
 
-                // Gmail requires FromEmail to match SmtpUsername or use plus addressing
-                // If FromEmail is different domain, use Gmail plus addressing or fallback to SmtpUsername
                 if (string.IsNullOrEmpty(fromEmail))
                 {
                     _logger.LogWarning("Gönderen e-posta adresi yapılandırılmamış, SMTP kullanıcı adı kullanılıyor");
@@ -78,13 +75,9 @@ namespace NotificationService.Services
                 }
                 else
                 {
-                    // If FromEmail is a different domain than Gmail, Gmail will reject it
-                    // Use Gmail plus addressing: username+alias@gmail.com
-                    // Or if it's a Gmail address, use it directly
+
                     if (!fromEmail.EndsWith("@gmail.com") && !fromEmail.EndsWith("@googlemail.com"))
                     {
-                        // For non-Gmail addresses, we need to use Gmail plus addressing
-                        // Extract the base Gmail username and add the alias
                         var baseUsername = smtpUsername.Split('@')[0];
                         var alias = fromEmail.Split('@')[0].Replace(".", "-");
                         fromEmail = $"{baseUsername}+{alias}@gmail.com";

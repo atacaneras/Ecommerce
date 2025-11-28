@@ -4,6 +4,7 @@ using NotificationService.DTOs;
 using NotificationService.Models;
 using Polly;
 using Shared.Infrastructure.Repository;
+using System.Text.Json;
 
 namespace NotificationService.Services
 {
@@ -13,6 +14,8 @@ namespace NotificationService.Services
         private readonly NotificationDbContext _context;
         private readonly IEmailService _emailService;
         private readonly ISmsService _smsService;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<NotificationServiceImpl> _logger;
 
         public NotificationServiceImpl(
@@ -20,12 +23,16 @@ namespace NotificationService.Services
             NotificationDbContext context,
             IEmailService emailService,
             ISmsService smsService,
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration,
             ILogger<NotificationServiceImpl> logger)
         {
             _notificationRepository = notificationRepository;
             _context = context;
             _emailService = emailService;
             _smsService = smsService;
+            _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
             _logger = logger;
         }
 
@@ -69,19 +76,25 @@ namespace NotificationService.Services
                     notificationsToSend.Add(smsNotification);
                 }
 
-                // Bildirimleri kaydet ve gönder (sadece ShouldSendImmediately true ise)
+                // Bildirimleri kaydet ve gönder
                 foreach (var notification in notificationsToSend)
                 {
                     await _notificationRepository.AddAsync(notification);
-                    
+
                     if (request.ShouldSendImmediately)
                     {
-                        await SendNotificationWithRetryAsync(notification, request.CustomerName);
+                        InvoiceData? invoiceData = null;
+                        if (request.Message.Contains("onaylandı", StringComparison.OrdinalIgnoreCase))
+                        {
+                            invoiceData = await FetchInvoiceDataAsync(request.OrderId);
+                        }
+
+                        await SendNotificationWithRetryAsync(notification, request.CustomerName, invoiceData);
                     }
                     else
                     {
                         _logger.LogInformation(
-                            "Bildirim {NotificationId} Pending olarak kaydedildi, gönderilmedi. Sipariş #{OrderId}",
+                            "Bildirim {NotificationId} Pending olarak kaydedildi. Sipariş #{OrderId}",
                             notification.Id, notification.OrderId);
                     }
                 }
@@ -96,6 +109,57 @@ namespace NotificationService.Services
             }
         }
 
+        private async Task<InvoiceData?> FetchInvoiceDataAsync(Guid orderId)
+        {
+            try
+            {
+                var invoiceServiceUrl = _configuration["Services:InvoiceService"] ?? "http://invoice-service";
+                var httpClient = _httpClientFactory.CreateClient();
+
+                var response = await httpClient.GetAsync($"{invoiceServiceUrl}/api/invoices/order/{orderId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    var invoiceResponse = JsonSerializer.Deserialize<InvoiceResponse>(jsonString, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    if (invoiceResponse != null)
+                    {
+                        return new InvoiceData
+                        {
+                            InvoiceNumber = invoiceResponse.InvoiceNumber,
+                            SubTotal = invoiceResponse.SubTotal,
+                            TaxRate = invoiceResponse.TaxRate,
+                            TaxAmount = invoiceResponse.TaxAmount,
+                            TotalAmount = invoiceResponse.TotalAmount,
+                            CreatedAt = invoiceResponse.CreatedAt,
+                            DueDate = invoiceResponse.DueDate,
+                            Items = invoiceResponse.Items.Select(i => new InvoiceItemData
+                            {
+                                ProductName = i.ProductName,
+                                Quantity = i.Quantity,
+                                UnitPrice = i.UnitPrice,
+                                TotalPrice = i.Quantity * i.UnitPrice
+                            }).ToList()
+                        };
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Sipariş {OrderId} için fatura bulunamadı", orderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatura bilgisi alınırken hata oluştu: {OrderId}", orderId);
+            }
+
+            return null;
+        }
+
         public async Task<bool> SendPendingNotificationsAsync(Guid orderId)
         {
             try
@@ -106,14 +170,14 @@ namespace NotificationService.Services
 
                 if (pendingNotifications.Any())
                 {
-                    _logger.LogInformation("Sipariş {OrderId} için {Count} adet pending bildirim bulundu, gönderiliyor...", 
+                    _logger.LogInformation("Sipariş {OrderId} için {Count} adet pending bildirim bulundu",
                         orderId, pendingNotifications.Count);
+
+                    InvoiceData? invoiceData = await FetchInvoiceDataAsync(orderId);
 
                     foreach (var notification in pendingNotifications)
                     {
-                        // For pending notifications, we don't have customer name, so pass null
-                        // The email will still work without the name
-                        await SendNotificationWithRetryAsync(notification, null);
+                        await SendNotificationWithRetryAsync(notification, null, invoiceData);
                     }
 
                     _logger.LogInformation("Sipariş {OrderId} için tüm pending bildirimler gönderildi", orderId);
@@ -129,7 +193,7 @@ namespace NotificationService.Services
             }
         }
 
-        private async Task SendNotificationWithRetryAsync(Notification notification, string? customerName = null)
+        private async Task SendNotificationWithRetryAsync(Notification notification, string? customerName = null, InvoiceData? invoiceData = null)
         {
             var retryPolicy = Policy
                 .Handle<Exception>()
@@ -139,8 +203,8 @@ namespace NotificationService.Services
                     async (exception, timeSpan, retryCount, context) =>
                     {
                         _logger.LogWarning(exception,
-                            "{RetryCount}/3 denemesi başarısız oldu: {Type} bildirimi {Recipient} alıcısına gönderilemedi. {TimeSpan} sonra tekrar deneniyor.",
-                            retryCount, notification.Type, notification.Recipient, timeSpan);
+                            "{RetryCount}/3 denemesi başarısız oldu: {Type} bildirimi {Recipient} alıcısına gönderilemedi.",
+                            retryCount, notification.Type, notification.Recipient);
 
                         notification.RetryCount = retryCount;
                         await _notificationRepository.UpdateAsync(notification);
@@ -152,17 +216,16 @@ namespace NotificationService.Services
                 {
                     bool success = false;
 
-                    // Gerçek email/sms gönderimi
                     if (notification.Type == NotificationType.Email)
                     {
-                        // Determine subject based on message content
                         var emailSubject = GetEmailSubject(notification.Message);
                         success = await _emailService.SendEmailAsync(
                             notification.Recipient,
                             emailSubject,
                             notification.Message,
                             notification.OrderId.ToString(),
-                            customerName);
+                            customerName,
+                            invoiceData);
                     }
                     else if (notification.Type == NotificationType.SMS)
                     {
@@ -251,7 +314,7 @@ namespace NotificationService.Services
             }
             else if (lowerMessage.Contains("onaylandı") || lowerMessage.Contains("onaylandi"))
             {
-                return "Siparişiniz Onaylandı";
+                return "Siparişiniz Onaylandı - Fatura";
             }
             else if (lowerMessage.Contains("alındı") || lowerMessage.Contains("alindi") || lowerMessage.Contains("bekliyor"))
             {
@@ -277,5 +340,24 @@ namespace NotificationService.Services
                 SentAt = notification.SentAt
             };
         }
+    }
+
+    public class InvoiceResponse
+    {
+        public string InvoiceNumber { get; set; } = string.Empty;
+        public List<InvoiceItemResponse> Items { get; set; } = new();
+        public decimal SubTotal { get; set; }
+        public decimal TaxRate { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime DueDate { get; set; }
+    }
+
+    public class InvoiceItemResponse
+    {
+        public string ProductName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
     }
 }

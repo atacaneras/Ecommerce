@@ -97,6 +97,26 @@ services:
     networks:
       - beymen-network
 
+  # PostgreSQL - Invoice Database
+  postgres-invoice:
+    image: postgres:15
+    container_name: beymen-postgres-invoice
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_DB: InvoiceDb
+      POSTGRES_USER: invoiceuser
+      POSTGRES_PASSWORD: invoicepass123
+    volumes:
+      - invoice-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoiceuser -d InvoiceDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beymen-network
+
   # Order Service
   order-service:
     build:
@@ -165,6 +185,7 @@ services:
       - RabbitMQ__Username=admin
       - RabbitMQ__Password=admin123
       - RabbitMQ__Port=5672
+      - Services__InvoiceService=http://invoice-service
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -200,6 +221,32 @@ services:
       - beymen-network
     restart: on-failure
 
+  # Invoice Service
+  invoice-service:
+    build:
+      context: .
+      dockerfile: InvoiceService/Dockerfile
+    container_name: beymen-invoice-service
+    ports:
+      - "5005:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres-invoice;Database=InvoiceDb;Username=invoiceuser;Password=invoicepass123
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=admin
+      - RabbitMQ__Password=admin123
+      - RabbitMQ__Port=5672
+      - Services__OrderService=http://order-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-invoice:
+        condition: service_healthy
+    networks:
+      - beymen-network
+    restart: on-failure
+
   # Frontend
   frontend:
     build:
@@ -213,6 +260,7 @@ services:
       - REACT_APP_STOCK_API=http://stock-service:80
       - REACT_APP_NOTIFICATION_API=http://notification-service:80
       - REACT_APP_VERIFICATION_API=http://verification-service:80
+      - REACT_APP_INVOICE_API=http://invoice-service:80
     networks:
       - beymen-network
     restart: on-failure
@@ -221,12 +269,14 @@ services:
       - stock-service
       - notification-service
       - verification-service
+      - invoice-service
 
 volumes:
   order-data:
   stock-data:
   notification-data:
   verification-data:
+  invoice-data:
 
 networks:
   beymen-network:

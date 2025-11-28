@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Package, Bell, ClipboardCheck } from 'lucide-react';
+import { ShoppingCart, Package, Bell, ClipboardCheck, FileText } from 'lucide-react';
 
 // Import sub-components
 import OrdersTab from './tabs/OrdersTab';
 import ProductsTab from './tabs/ProductsTab';
 import VerificationsTab from './tabs/VerificationsTab';
 import NotificationsTab from './tabs/NotificationsTab';
+import InvoicesTab from './tabs/InvoicesTab';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [verifications, setVerifications] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('orders');
   
@@ -33,17 +35,20 @@ export default function Dashboard() {
   const STOCK_API = 'http://localhost:5002';
   const NOTIFICATION_API = 'http://localhost:5003';
   const VERIFICATION_API = 'http://localhost:5004';
+  const INVOICE_API = 'http://localhost:5005';
 
   useEffect(() => {
     fetchOrders();
     fetchProducts();
     fetchNotifications();
     fetchVerifications();
+    fetchInvoices();
     const interval = setInterval(() => {
       fetchOrders();
       fetchProducts();
       fetchNotifications();
       fetchVerifications();
+      fetchInvoices();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -94,6 +99,18 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Doğrulamalar yüklenemedi:', err);
+    }
+  };
+
+  const fetchInvoices = async () => {
+    try {
+      const res = await fetch(`${INVOICE_API}/api/invoices`);
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data || []);
+      }
+    } catch (err) {
+      console.error('Faturalar yüklenemedi:', err);
     }
   };
 
@@ -246,6 +263,7 @@ export default function Dashboard() {
             fetchOrders();
             fetchVerifications();
             fetchProducts();
+            fetchInvoices();
         } else {
             const errorData = await res.json();
             alert('Sipariş onaylanırken hata oluştu: ' + (errorData.message || res.statusText));
@@ -270,7 +288,6 @@ export default function Dashboard() {
 
         if (res.ok) {
             alert('Sipariş başarıyla iptal edildi!');
-            // Verifications'ı önce güncelle, sonra diğerlerini
             await fetchVerifications();
             await fetchOrders();
             await fetchProducts();
@@ -311,17 +328,18 @@ export default function Dashboard() {
       {/* Tabs */}
       <div className="bg-slate-900 border-b border-slate-700 sticky top-16 z-40">
         <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto">
             {[
               { id: 'orders', label: `Siparişler (${orders.length})`, icon: ShoppingCart },
               { id: 'verifications', label: `Sipariş Onay (${pendingVerifications.length})`, icon: ClipboardCheck },
+              { id: 'invoices', label: `Faturalar (${invoices.length})`, icon: FileText },
               { id: 'products', label: `Ürünler (${products.length})`, icon: Package },
               { id: 'notifications', label: `Bildirimler (${notifications.length})`, icon: Bell }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 font-medium transition-all flex items-center gap-2 border-b-2 ${
+                className={`px-4 py-3 font-medium transition-all flex items-center gap-2 border-b-2 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-400'
                     : 'border-transparent text-slate-400 hover:text-slate-300'
@@ -357,6 +375,10 @@ export default function Dashboard() {
             cancelOrder={cancelOrder}
             loading={loading}
           />
+        )}
+
+        {activeTab === 'invoices' && (
+          <InvoicesTab invoices={invoices} />
         )}
 
         {activeTab === 'products' && (
