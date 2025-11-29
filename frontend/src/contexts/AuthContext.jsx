@@ -98,28 +98,30 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
+ const logout = async () => {
     try {
+      // LocalStorage'dan refresh token'ı al
       const refreshToken = localStorage.getItem('refreshToken');
       
       if (refreshToken) {
-        await fetch(`${IDENTITY_API}/api/auth/revoke-token`, {
+        // Backend'e iptal isteği gönder
+        await fetch('http://localhost:5000/api/auth/revoke-token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            // Eğer endpoint [Authorize] istiyorsa access token da eklenmeli
+            'Authorization': `Bearer ${localStorage.getItem('token')}` 
           },
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({ refreshToken })
         });
       }
-    } catch (err) {
-      console.error('Logout error:', err);
+    } catch (error) {
+      console.error('Logout error:', error);
     } finally {
-      // Clear local storage
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      // Hata olsa bile kullanıcıyı yerel olarak çıkış yaptır
       setUser(null);
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
     }
   };
 

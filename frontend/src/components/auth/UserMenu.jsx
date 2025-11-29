@@ -9,7 +9,6 @@ export default function UserMenu() {
     const menuRef = useRef(null);
     const navigate = useNavigate();
 
-
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -24,6 +23,7 @@ export default function UserMenu() {
     const handleLogout = async () => {
         await logout();
         setIsOpen(false);
+        navigate('/login');
     };
 
     if (!user) return null;
