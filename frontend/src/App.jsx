@@ -1,40 +1,49 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext'; 
 import Dashboard from './components/Dashboard';
 import LoginPage from './components/auth/LoginPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token'); // Token'ı localStorage'dan kontrol et
-  if (!token) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen text-white">Yükleniyor...</div>;
+  }
+
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
+
   return children;
 };
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Login Rotası */}
-        <Route path="/login" element={<LoginPage />} />
-        
-        {/* Ana Sayfa (Dashboard) - Korumalı */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <div className="app-container">
-                <Dashboard />
-              </div>
-            </ProtectedRoute>
-          }
-        />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Login Sayfası */}
+          <Route path="/login" element={<LoginPage onLoginSuccess={() => window.location.href = '/'} />} />
 
-        {/* Bilinmeyen rotaları dashboard'a yönlendir */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Ana Sayfa (Dashboard) - Sadece giriş yapmışlar görebilir */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <div className="app-container">
+                  <Dashboard />
+                </div>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Bilinmeyen rotalar ana sayfaya gitsin */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
