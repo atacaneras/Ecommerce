@@ -17,6 +17,26 @@ services:
     networks:
       - beymen-network
 
+  # PostgreSQL - Identity Database
+  postgres-identity:
+    image: postgres:15
+    container_name: beymen-postgres-identity
+    ports:
+      - "5437:5432"
+    environment:
+      POSTGRES_DB: IdentityDb
+      POSTGRES_USER: identityuser
+      POSTGRES_PASSWORD: identitypass123
+    volumes:
+      - identity-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identityuser -d IdentityDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beymen-network
+
   # PostgreSQL - Order Database
   postgres-order:
     image: postgres:15
@@ -117,6 +137,30 @@ services:
     networks:
       - beymen-network
 
+  # Identity Service
+  identity-service:
+    build:
+      context: .
+      dockerfile: IdentityService/Dockerfile
+    container_name: beymen-identity-service
+    ports:
+      - "5000:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=IdentityDb;Username=identityuser;Password=identitypass123
+      - JwtSettings__SecretKey=BeymenCase-SuperSecure-JWT-Secret-Key-2024-MustBe-AtLeast-32Characters-Long-ForSecurity
+      - JwtSettings__Issuer=IdentityService
+      - JwtSettings__Audience=BeymenCase
+      - JwtSettings__AccessTokenExpiryMinutes=60
+      - JwtSettings__RefreshTokenExpiryDays=7
+    depends_on:
+      postgres-identity:
+        condition: service_healthy
+    networks:
+      - beymen-network
+    restart: on-failure
+
   # Order Service
   order-service:
     build:
@@ -135,11 +179,14 @@ services:
       - RabbitMQ__Port=5672
       - Services__StockService=http://stock-service
       - Services__NotificationService=http://notification-service
+      - Services__IdentityService=http://identity-service
     depends_on:
       rabbitmq:
         condition: service_healthy
       postgres-order:
         condition: service_healthy
+      identity-service:
+        condition: service_started
     networks:
       - beymen-network
     restart: on-failure
@@ -256,6 +303,7 @@ services:
     ports:
       - "3001:3000"
     environment:
+      - REACT_APP_IDENTITY_API=http://identity-service:80
       - REACT_APP_API_BASE=http://order-service:80
       - REACT_APP_STOCK_API=http://stock-service:80
       - REACT_APP_NOTIFICATION_API=http://notification-service:80
@@ -265,6 +313,7 @@ services:
       - beymen-network
     restart: on-failure
     depends_on:
+      - identity-service
       - order-service
       - stock-service
       - notification-service
@@ -272,6 +321,7 @@ services:
       - invoice-service
 
 volumes:
+  identity-data:
   order-data:
   stock-data:
   notification-data:
