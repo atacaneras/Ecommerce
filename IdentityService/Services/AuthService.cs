@@ -2,7 +2,6 @@
 using IdentityService.DTOs;
 using IdentityService.Models;
 using IdentityService.Security;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
