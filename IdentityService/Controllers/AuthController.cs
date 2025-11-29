@@ -88,12 +88,9 @@ namespace IdentityService.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> RevokeToken([FromBody] RefreshTokenRequest request)
         {
-            var result = await _authService.RevokeTokenAsync(request.RefreshToken);
-
-            if (!result)
-                return BadRequest(new { message = "Token bulunamadı" });
-
-            return Ok(new { message = "Token başarıyla iptal edildi" });
+            
+            await _authService.RevokeTokenAsync(request.RefreshToken);
+            return Ok(new { message = "Token işlendi" });
         }
 
         /// <summary>

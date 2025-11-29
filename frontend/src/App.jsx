@@ -1,9 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext'; 
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './components/Dashboard';
 import LoginPage from './components/auth/LoginPage';
-import ProfilePage from './components/auth/ProfilePage';
+import ProfilePage from './components/auth/ProfilePage'; // 1. BU SATIRI EKLEYİN
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -30,7 +30,6 @@ function AppRoutes() {
           element={user ? <Navigate to="/" replace /> : <LoginPage onLoginSuccess={() => window.location.href = '/'} />} 
         />
         
-        {/* Dashboard Rotası */}
         <Route
           path="/"
           element={
@@ -41,8 +40,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-
-        {/* YENİ EKLENEN: Profil Sayfası Rotası */}
+        
         <Route
           path="/profile"
           element={
@@ -61,25 +59,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          {/* Login Sayfası */}
-          <Route path="/login" element={<LoginPage onLoginSuccess={() => window.location.href = '/'} />} />
-
-          {/* Ana Sayfa (Dashboard) - Sadece giriş yapmışlar görebilir */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <div className="app-container">
-                  <Dashboard />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Bilinmeyen rotalar ana sayfaya gitsin */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+         <AppRoutes />
       </BrowserRouter>
     </AuthProvider>
   );
