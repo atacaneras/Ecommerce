@@ -87,7 +87,7 @@
         @{Display="Bildirim Servisi"; Url="http://localhost:5003/swagger"},
         @{Display="Onay Servisi"; Url="http://localhost:5004/swagger"},
         @{Display="Fatura Servisi"; Url="http://localhost:5005/swagger"},
-        @{Display="Auth Servisi"; Url="http://localhost:5006/swagger"},
+        @{Display="Auth Servisi"; Url="http://localhost:5000/swagger"},
         @{Display="RabbitMQ Yönetim"; Url="http://localhost:15672"}
     )
 

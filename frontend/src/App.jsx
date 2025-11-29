@@ -1,32 +1,40 @@
-import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import LoginPage from './components/auth/LoginPage';
-import ProtectedRoute from './components/auth/ProtectedRoute';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
+import LoginPage from './components/auth/LoginPage';
 import './App.css';
 
-function AppContent() {
-  const { isAuthenticated } = useAuth();
-  const [showDashboard, setShowDashboard] = useState(false);
-
-  if (!isAuthenticated && !showDashboard) {
-    return <LoginPage onLoginSuccess={() => setShowDashboard(true)} />;
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem('token'); // Token'ı localStorage'dan kontrol et
+  if (!token) {
+    return <Navigate to="/login" replace />;
   }
-
-  return (
-    <ProtectedRoute>
-      <div className="app-container">
-        <Dashboard />
-      </div>
-    </ProtectedRoute>
-  );
-}
+  return children;
+};
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        {/* Login Rotası */}
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Ana Sayfa (Dashboard) - Korumalı */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <div className="app-container">
+                <Dashboard />
+              </div>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Bilinmeyen rotaları dashboard'a yönlendir */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
