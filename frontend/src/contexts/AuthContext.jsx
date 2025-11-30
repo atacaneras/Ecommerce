@@ -98,32 +98,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
- const logout = async () => {
-    try {
-      // LocalStorage'dan refresh token'ı al
-      const refreshToken = localStorage.getItem('refreshToken');
-      
-      if (refreshToken) {
-        // Backend'e iptal isteği gönder
-        await fetch('http://localhost:5000/api/auth/revoke-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // Eğer endpoint [Authorize] istiyorsa access token da eklenmeli
-            'Authorization': `Bearer ${localStorage.getItem('token')}` 
-          },
-          body: JSON.stringify({ refreshToken })
-        });
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Hata olsa bile kullanıcıyı yerel olarak çıkış yaptır
-      setUser(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
+const logout = async () => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    const accessToken = localStorage.getItem('accessToken');
+    
+    if (refreshToken && accessToken) {
+      // Backend'e iptal isteği gönder
+      await fetch(`${IDENTITY_API}/api/auth/revoke-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ refreshToken })
+      });
     }
-  };
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Hata olsa bile devam et
+  } finally {
+    // Kullanıcıyı yerel olarak çıkış yaptır
+    setUser(null);
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  }
+};
 
   const refreshToken = async () => {
     try {
