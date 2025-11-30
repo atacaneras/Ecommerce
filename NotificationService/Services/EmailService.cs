@@ -88,7 +88,7 @@ namespace NotificationService.Services
                 // Display name yoksa e-posta adresini kullan
                 if (string.IsNullOrWhiteSpace(fromDisplayName))
                 {
-                    fromDisplayName = "Trendyol E-Ticaret";
+                    fromDisplayName = "ATA E-Ticaret";
                 }
 
                 _logger.LogInformation("E-posta gönderiliyor: {To}, Konu: {Subject}, SMTP: {Host}:{Port}",
