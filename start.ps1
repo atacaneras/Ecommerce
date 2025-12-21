@@ -41,25 +41,9 @@
         exit 1
     }
 
-    # Script durunca çalışacak cleanup
-    $script:cleanup = {
-        Write-Host "`nScript durdu, container'lar kapatılıyor..." -ForegroundColor Yellow
-        & $composeCmd down 2>$null
-        Write-Host "✓ Servisler kapatıldı" -ForegroundColor Green
-    }
-
-    # Ctrl+C veya script kapanınca cleanup çalıştır
-    $null = Register-EngineEvent PowerShell.Exiting -Action $script:cleanup
-
-    # Compose temizliği
-    Write-Host "[1] Docker Compose kaynakları temizleniyor..." -ForegroundColor Yellow
-    & $composeCmd down 2>$null
-    Write-Host "    ✓ Compose temizliği tamamlandı" -ForegroundColor Green
-    Write-Host ""
-
     # Servisleri başlat
     Write-Host "[2] Servisler inşa ediliyor ve başlatılıyor..." -ForegroundColor Yellow
-    $buildOutput = & $composeCmd up -d --build 2>&1
+    $buildOutput = & $composeCmd up -d
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "✗ Servisler başlatılamadı!" -ForegroundColor Red
