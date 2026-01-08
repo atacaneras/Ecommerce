@@ -164,7 +164,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={formData.usernameOrEmail}
                       onChange={handleChange}
                       className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="admin veya admin@beymen.com"
+                      placeholder="admin veya admin@ecommerce.com"
                       required
                     />
                   </div>

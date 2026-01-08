@@ -30,7 +30,7 @@ namespace IdentityService.Security
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
             var issuer = jwtSettings["Issuer"] ?? "IdentityService";
-            var audience = jwtSettings["Audience"] ?? "BeymenCase";
+            var audience = jwtSettings["Audience"] ?? "ecommerceCase";
             var expiryMinutes = int.Parse(jwtSettings["AccessTokenExpiryMinutes"] ?? "60");
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));

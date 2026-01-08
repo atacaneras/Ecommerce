@@ -2,7 +2,7 @@ services:
   # RabbitMQ
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: beymen-rabbitmq
+    container_name: ecommerce-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -15,12 +15,12 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Identity Database
   postgres-identity:
     image: postgres:15
-    container_name: beymen-postgres-identity
+    container_name: ecommerce-postgres-identity
     ports:
       - "5437:5432"
     environment:
@@ -35,12 +35,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Order Database
   postgres-order:
     image: postgres:15
-    container_name: beymen-postgres-order
+    container_name: ecommerce-postgres-order
     ports:
       - "5432:5432"
     environment:
@@ -55,12 +55,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Stock Database
   postgres-stock:
     image: postgres:15
-    container_name: beymen-postgres-stock
+    container_name: ecommerce-postgres-stock
     ports:
       - "5433:5432"
     environment:
@@ -75,12 +75,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Notification Database
   postgres-notification:
     image: postgres:15
-    container_name: beymen-postgres-notification
+    container_name: ecommerce-postgres-notification
     ports:
       - "5434:5432"
     environment:
@@ -95,12 +95,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Verification Database
   postgres-verification:
     image: postgres:15
-    container_name: beymen-postgres-verification
+    container_name: ecommerce-postgres-verification
     ports:
       - "5435:5432"
     environment:
@@ -115,12 +115,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # PostgreSQL - Invoice Database
   postgres-invoice:
     image: postgres:15
-    container_name: beymen-postgres-invoice
+    container_name: ecommerce-postgres-invoice
     ports:
       - "5436:5432"
     environment:
@@ -135,30 +135,30 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - beymen-network
+      - ecommerce-network
 
   # Identity Service
   identity-service:
     build:
       context: .
       dockerfile: IdentityService/Dockerfile
-    container_name: beymen-identity-service
+    container_name: ecommerce-identity-service
     ports:
       - "5000:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=IdentityDb;Username=identityuser;Password=identitypass123
-      - JwtSettings__SecretKey=BeymenCase-SuperSecure-JWT-Secret-Key-2024-MustBe-AtLeast-32Characters-Long-ForSecurity
+      - JwtSettings__SecretKey=ecommerceCase-SuperSecure-JWT-Secret-Key-2024-MustBe-AtLeast-32Characters-Long-ForSecurity
       - JwtSettings__Issuer=IdentityService
-      - JwtSettings__Audience=BeymenCase
+      - JwtSettings__Audience=ecommerceCase
       - JwtSettings__AccessTokenExpiryMinutes=60
       - JwtSettings__RefreshTokenExpiryDays=7
     depends_on:
       postgres-identity:
         condition: service_healthy
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Order Service
@@ -166,7 +166,7 @@ services:
     build:
       context: .
       dockerfile: OrderService/Dockerfile
-    container_name: beymen-order-service
+    container_name: ecommerce-order-service
     ports:
       - "5001:80"
     environment:
@@ -188,7 +188,7 @@ services:
       identity-service:
         condition: service_started
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Stock Service
@@ -196,7 +196,7 @@ services:
     build:
       context: .
       dockerfile: StockService/Dockerfile
-    container_name: beymen-stock-service
+    container_name: ecommerce-stock-service
     ports:
       - "5002:80"
     environment:
@@ -213,7 +213,7 @@ services:
       postgres-stock:
         condition: service_healthy
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Notification Service
@@ -221,7 +221,7 @@ services:
     build:
       context: .
       dockerfile: NotificationService/Dockerfile
-    container_name: beymen-notification-service
+    container_name: ecommerce-notification-service
     ports:
       - "5003:80"
     environment:
@@ -239,7 +239,7 @@ services:
       postgres-notification:
         condition: service_healthy
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Verification Service
@@ -247,7 +247,7 @@ services:
     build:
       context: .
       dockerfile: VerificationService/Dockerfile
-    container_name: beymen-verification-service
+    container_name: ecommerce-verification-service
     ports:
       - "5004:80"
     environment:
@@ -265,7 +265,7 @@ services:
       postgres-verification:
         condition: service_healthy
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Invoice Service
@@ -273,7 +273,7 @@ services:
     build:
       context: .
       dockerfile: InvoiceService/Dockerfile
-    container_name: beymen-invoice-service
+    container_name: ecommerce-invoice-service
     ports:
       - "5005:80"
     environment:
@@ -291,7 +291,7 @@ services:
       postgres-invoice:
         condition: service_healthy
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
 
   # Frontend
@@ -299,7 +299,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: beymen-frontend
+    container_name: ecommerce-frontend
     ports:
       - "3001:3000"
     environment:
@@ -310,7 +310,7 @@ services:
       - REACT_APP_VERIFICATION_API=http://verification-service:80
       - REACT_APP_INVOICE_API=http://invoice-service:80
     networks:
-      - beymen-network
+      - ecommerce-network
     restart: on-failure
     depends_on:
       - identity-service
@@ -329,5 +329,5 @@ volumes:
   invoice-data:
 
 networks:
-  beymen-network:
+  ecommerce-network:
     driver: bridge

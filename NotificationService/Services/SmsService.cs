@@ -28,7 +28,7 @@ namespace NotificationService.Services
             {
                 var username = _configuration["Sms:NetGSM:Username"];
                 var password = _configuration["Sms:NetGSM:Password"];
-                var header = _configuration["Sms:NetGSM:Header"]; // Başlık (örn: "BEYMEN")
+                var header = _configuration["Sms:NetGSM:Header"]; // Başlık (örn: "NetGSM")
 
                 if (string.IsNullOrEmpty(username))
                 {

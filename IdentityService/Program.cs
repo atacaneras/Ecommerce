@@ -139,7 +139,7 @@ using (var scope = app.Services.CreateScope())
             var adminUser = new IdentityService.Models.User
             {
                 Username = "admin",
-                Email = "admin@beymen.com",
+                Email = "admin@ecommerce.com",
                 PasswordHash = hash,
                 Salt = salt,
                 Role = IdentityService.Models.UserRole.Admin,
